@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIRVIVAD —National Intelligence  for Record Verification,  Integrity, Validation And Anomaly Detection &amp; Validation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 34 34" fill="none"><path d="M4 30 L17 4 L30 30 M4 30 L30 30 M10 30 L10 18 L17 18 M24 30 L24 22 L17 22" stroke="#9FB09F" stroke-width="1.3"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>NIRVIVAD</h1><span class="brand-full-title">National Intelligence for Record Verification, Integrity, Validation And Anomaly Detection</span>
+        <span>NATIONAL RECORD VERIFICATION</span>
+      </div>
+    </div>
+
+    <nav class="modules">
+      <div class="nav-group-label">Operations</div>
+      <button class="nav-item active" data-view="dashboard">
+        <svg class="ic" viewBox="0 0 20 20" fill="none"><rect x="2.5" y="2.5" width="6" height="7" rx="0.5" stroke="currentColor" stroke-width="1.2"/><rect x="11.5" y="2.5" width="6" height="4" rx="0.5" stroke="currentColor" stroke-width="1.2"/><rect x="11.5" y="9" width="6" height="8.5" rx="0.5" stroke="currentColor" stroke-width="1.2"/><rect x="2.5" y="12" width="6" height="5.5" rx="0.5" stroke="currentColor" stroke-width="1.2"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-view="upload">
+        <svg class="ic" viewBox="0 0 20 20" fill="none"><path d="M10 13V3M10 3L6.5 6.5M10 3l3.5 3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 13.5v2a1.5 1.5 0 001.5 1.5h10a1.5 1.5 0 001.5-1.5v-2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Upload &amp; Digitize
+      </button>
+      <button class="nav-item" data-view="verify">
+        <svg class="ic" viewBox="0 0 20 20" fill="none"><path d="M4 3.5h9l3 3v10a1 1 0 01-1 1H4a1 1 0 01-1-1v-12a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M6.5 9.5l2 2 4-4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Verification Queue <span class="count">18</span>
+      </button>
+      <button class="nav-item" data-view="records">
+        <svg class="ic" viewBox="0 0 20 20" fill="none"><rect x="3" y="2.5" width="14" height="15" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M6 6.5h8M6 9.5h8M6 12.5h5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+        Records Repository
+      </button>
+      <div class="nav-group-label">Platform</div>
+      <button class="nav-item" data-view="integrations">
+        <svg class="ic" viewBox="0 0 20 20" fill="none"><circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="1.2"/><circle cx="14" cy="14" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M8 8l4 4" stroke="currentColor" stroke-width="1.2"/></svg>
+        Integrations &amp; APIs
+      </button>
+      <button class="nav-item" data-view="reports">
+        <svg class="ic" viewBox="0 0 20 20" fill="none"><path d="M3 17V8M9 17V3M15 17v-6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Reports
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="role-badge">SR</div>
+      <div class="who">
+        <b>Revenue Officer</b>
+        Patna Circle · Bihar DILRMP
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <main>
+
+    <!-- DASHBOARD -->
+    <section class="view active" id="view-dashboard">
+      <div class="topbar">
+        <div>
+          <h2>Digitization overview</h2>
+          <p class="sub">Live status of legacy land record processing across connected districts, from scan intake through mutation-ready validation.</p>
+        </div>
+        <div class="search-wrap">
+          <svg viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M17 17l-4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <input type="text" placeholder="Search khasra no., owner, village…">
+        </div>
+      </div>
+
+      <div class="cadastral-band">
+        <svg class="grid-bg" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="plots" width="46" height="46" patternUnits="userSpaceOnUse">
+              <path d="M46 0H0V46" fill="none" stroke="#3E6650" stroke-width="1"/>
+              <path d="M0 0L46 46" fill="none" stroke="#2A4636" stroke-width="0.6"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#plots)"/>
+        </svg>
+        <div class="cadastral-band-inner">
+          <div>
+            <h3>412,860 legacy documents queued across 6 states for AI-assisted extraction</h3>
+            <p>OCR and classification models are tuned per script — Devanagari, Bengali, Tamil, Telugu — with human review routed automatically for anything below confidence threshold.</p>
+          </div>
+          <div class="cb-stat">
+            <div class="num">96.4%</div>
+            <div class="lbl">uptime, extraction pipeline</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-strip">
+        <div class="stat-card">
+          <div class="lbl">Documents processed</div>
+          <div class="val">84,217</div>
+          <div class="delta up">▲ 2,340 this week</div>
+        </div>
+        <div class="stat-card">
+          <div class="lbl">Extraction accuracy</div>
+          <div class="val">93.8%</div>
+          <div class="delta up">▲ 0.6pt since last model refresh</div>
+        </div>
+        <div class="stat-card">
+          <div class="lbl">Pending verification</div>
+          <div class="val">1,206</div>
+          <div class="delta warn">▲ 118 added today</div>
+        </div>
+        <div class="stat-card">
+          <div class="lbl">Open error cases</div>
+          <div class="val">327</div>
+          <div class="delta up">▼ 41 resolved today</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head">
+            <h4>State-wise digitization progress</h4>
+            <button class="link-btn" onclick="switchView('reports')">View full report</button>
+          </div>
+          <table>
+            <thead><tr><th>State</th><th>Districts live</th><th style="width:38%">Progress</th></tr></thead>
+            <tbody id="stateProgressBody"></tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h4>Validation status</h4></div>
+          <div class="donut-wrap">
+            <svg width="120" height="120" viewBox="0 0 42 42">
+              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#DAD4BF" stroke-width="6"></circle>
+              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#3F6B4A" stroke-width="6"
+                stroke-dasharray="68 32" stroke-dashoffset="25" transform="rotate(-90 21 21)"></circle>
+              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#B4842A" stroke-width="6"
+                stroke-dasharray="19 81" stroke-dashoffset="-43" transform="rotate(-90 21 21)"></circle>
+              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#A23B2E" stroke-width="6"
+                stroke-dasharray="13 87" stroke-dashoffset="-62" transform="rotate(-90 21 21)"></circle>
+            </svg>
+            <div class="legend">
+              <div class="row"><span class="sw" style="background:#3F6B4A"></span>Auto-validated <span class="val">68%</span></div>
+              <div class="row"><span class="sw" style="background:#B4842A"></span>Needs review <span class="val">19%</span></div>
+              <div class="row"><span class="sw" style="background:#A23B2E"></span>Flagged / mismatch <span class="val">13%</span></div>
+            </div>
+          </div>
+          <div class="panel-head" style="margin-top:20px;"><h4>Recent activity</h4></div>
+          <div id="activityFeed"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- UPLOAD -->
+    <section class="view" id="view-upload">
+      <div class="topbar">
+        <div>
+          <h2>Upload &amp; digitize</h2>
+          <p class="sub">Add scanned registers, cadastral maps, or legacy PDFs. Each batch runs through OCR, field classification, and rule-based validation automatically.</p>
+        </div>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 15V4M12 4L7 9M12 4l5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <h4>Drop scanned records here, or click to browse</h4>
+        <p>Accepts PDF, TIFF, JPG, PNG. Handwritten registers and cadastral map sheets are both supported.</p>
+        <input type="file" id="fileInput" multiple>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h4>Document language(s) present</h4></div>
+        <div class="lang-chips" id="langChips">
+          <span class="chip selected">Hindi</span>
+          <span class="chip">English</span>
+          <span class="chip">Bengali</span>
+          <span class="chip">Marathi</span>
+          <span class="chip">Tamil</span>
+          <span class="chip">Telugu</span>
+          <span class="chip">Gujarati</span>
+          <span class="chip">Kannada</span>
+          <span class="chip">Odia</span>
+        </div>
+      </div>
+
+      <div class="panel-head" style="margin-top:22px;"><h4>Batch: Muzaffarpur Tehsil Register, Vol. 14</h4></div>
+
+      <div class="record-card">
+        <div class="record-card-head">
+          <div>
+            <div class="fname">khatauni_vol14_pg003.tif</div>
+            <div class="fmeta">2,480 × 3,507px · scanned register page</div>
+          </div>
+          <span class="status-pill done">complete</span>
+        </div>
+        <div class="stepper">
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">Uploaded</div></div>
+          <div class="step-line done"></div>
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">OCR</div></div>
+          <div class="step-line done"></div>
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">Classification</div></div>
+          <div class="step-line done"></div>
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">Validation</div></div>
+          <div class="step-line done"></div>
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">Complete</div></div>
+        </div>
+      </div>
+
+      <div class="record-card">
+        <div class="record-card-head">
+          <div>
+            <div class="fname">khatauni_vol14_pg004.tif</div>
+            <div class="fmeta">2,480 × 3,507px · scanned register page</div>
+          </div>
+          <span class="status-pill review">needs review</span>
+        </div>
+        <div class="stepper">
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">Uploaded</div></div>
+          <div class="step-line done"></div>
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">OCR</div></div>
+          <div class="step-line done"></div>
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">Classification</div></div>
+          <div class="step-line done"></div>
+          <div class="step active"><div class="step-circle">4</div><div class="step-label">Validation</div></div>
+          <div class="step-line"></div>
+          <div class="step"><div class="step-circle">5</div><div class="step-label">Complete</div></div>
+        </div>
+      </div>
+
+      <div class="record-card">
+        <div class="record-card-head">
+          <div>
+            <div class="fname">khatauni_vol14_pg005.tif</div>
+            <div class="fmeta">2,480 × 3,507px · scanned register page</div>
+          </div>
+          <span class="status-pill processing">extracting text</span>
+        </div>
+        <div class="stepper">
+          <div class="step done"><div class="step-circle">✓</div><div class="step-label">Uploaded</div></div>
+          <div class="step-line"></div>
+          <div class="step active"><div class="step-circle">2</div><div class="step-label">OCR</div></div>
+          <div class="step-line"></div>
+          <div class="step"><div class="step-circle">3</div><div class="step-label">Classification</div></div>
+          <div class="step-line"></div>
+          <div class="step"><div class="step-circle">4</div><div class="step-label">Validation</div></div>
+          <div class="step-line"></div>
+          <div class="step"><div class="step-circle">5</div><div class="step-label">Complete</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VERIFICATION -->
+    <section class="view" id="view-verify">
+      <div class="topbar">
+        <div>
+          <h2>Verification queue</h2>
+          <p class="sub">Records below the confidence threshold, or flagged by cross-database checks, wait here for a reviewer to confirm or correct before they enter the live register.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h4>Queue — 18 records</h4></div>
+        <table>
+          <thead><tr><th>Khasra no.</th><th>Owner</th><th>Village</th><th>Reason flagged</th><th>Confidence</th><th></th></tr></thead>
+          <tbody id="queueBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel-head" style="margin-top:26px;"><h4>Reviewing — Khasra No. 214/2, Kanti Village</h4></div>
+      <div class="verify-shell">
+        <div class="doc-preview">
+          <div class="doc-sheet">
+            <div class="doc-title">खतौनी अभिलेख — Record of Rights</div>
+            <div class="doc-sub">Tehsil: Muzaffarpur Sadar · Vol. 14 · Pg. 004</div>
+            <div class="doc-line"><span>Khata No.</span><span class="highlight">47</span></div>
+            <div class="doc-line"><span>Khasra No.</span><span class="highlight">214/2</span></div>
+            <div class="doc-line"><span>Owner name</span><span class="highlight low">Ramesh???r Sah</span></div>
+            <div class="doc-line"><span>Father's name</span><span>Late Sitaram Sah</span></div>
+            <div class="doc-line"><span>Village</span><span>Kanti</span></div>
+            <div class="doc-line"><span>Tehsil</span><span>Muzaffarpur Sadar</span></div>
+            <div class="doc-line"><span>District</span><span>Muzaffarpur</span></div>
+            <div class="doc-line"><span>Plot area</span><span class="highlight low">0.??  acre</span></div>
+            <div class="doc-line"><span>Land classification</span><span>Agricultural — irrigated</span></div>
+            <div class="doc-line"><span>Mutation ref.</span><span>MUT/2019/1187</span></div>
+            <div class="doc-line" style="border:none;"><span>Registration no.</span><span>RG-88214</span></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="field-form">
+            <div class="field-row">
+              <div class="fr-top"><label>Owner name</label><span class="conf low"><span class="conf-dot"></span>52% confidence</span></div>
+              <input type="text" value="Rameshwar Sah">
+            </div>
+            <div class="field-row">
+              <div class="fr-top"><label>Khata number</label><span class="conf high"><span class="conf-dot"></span>99% confidence</span></div>
+              <input type="text" value="47">
+            </div>
+            <div class="field-row">
+              <div class="fr-top"><label>Khasra number</label><span class="conf high"><span class="conf-dot"></span>97% confidence</span></div>
+              <input type="text" value="214/2">
+            </div>
+            <div class="field-row">
+              <div class="fr-top"><label>Plot area (acre)</label><span class="conf low"><span class="conf-dot"></span>44% confidence</span></div>
+              <input type="text" value="0.62">
+            </div>
+            <div class="field-row">
+              <div class="fr-top"><label>Village / Tehsil / District</label><span class="conf mid"><span class="conf-dot"></span>81% confidence</span></div>
+              <input type="text" value="Kanti / Muzaffarpur Sadar / Muzaffarpur">
+            </div>
+            <div class="field-row">
+              <div class="fr-top"><label>Land classification</label><span class="conf high"><span class="conf-dot"></span>95% confidence</span></div>
+              <input type="text" value="Agricultural — irrigated">
+            </div>
+          </div>
+          <div class="verify-actions">
+            <button class="btn btn-danger btn-sm">Reject page</button>
+            <button class="btn btn-ghost btn-sm">Save draft</button>
+            <button class="btn btn-primary btn-sm">Confirm &amp; publish record</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RECORDS REPOSITORY -->
+    <section class="view" id="view-records">
+      <div class="topbar">
+        <div>
+          <h2>Records repository</h2>
+          <p class="sub">Search the digitized, validated register. Every entry keeps a full audit trail back to its source scan.</p>
+        </div>
+      </div>
+
+      <div class="filters">
+        <input type="text" placeholder="Owner name or khasra no." style="min-width:220px;">
+        <select><option>All districts</option><option>Muzaffarpur</option><option>Patna</option><option>Nashik</option><option>Belagavi</option></select>
+        <select><option>All classifications</option><option>Agricultural</option><option>Residential</option><option>Commercial</option></select>
+        <select><option>All statuses</option><option>Verified</option><option>Pending mutation</option></select>
+        <button class="btn btn-ghost btn-sm">Export CSV</button>
+      </div>
+
+      <div class="panel" style="padding:0;">
+        <table class="repo-table">
+          <thead>
+            <tr><th style="padding-left:20px;">Khata / Khasra</th><th>Owner</th><th>Village</th><th>District</th><th>Area</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="repoBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- INTEGRATIONS -->
+    <section class="view" id="view-integrations">
+      <div class="topbar">
+        <div>
+          <h2>Integrations &amp; APIs</h2>
+          <p class="sub">Connections to existing land record and geospatial systems, so validated records sync without duplicate data entry.</p>
+        </div>
+      </div>
+
+      <div class="integ-grid">
+        <div class="integ-card">
+          <div class="integ-top">
+            <div class="integ-icon">LR</div>
+            <span class="conn-dot on"><span class="d"></span>Connected</span>
+          </div>
+          <h4>LRMS — State Land Records</h4>
+          <p>Two-way sync of ownership and mutation entries with the state Land Records Management System.</p>
+          <div class="integ-meta">Last sync: 6 minutes ago</div>
+        </div>
+        <div class="integ-card">
+          <div class="integ-top">
+            <div class="integ-icon">DL</div>
+            <span class="conn-dot on"><span class="d"></span>Connected</span>
+          </div>
+          <h4>DILRMP Database</h4>
+          <p>Feeds validated records into the Digital India Land Records Modernisation Programme registry.</p>
+          <div class="integ-meta">Last sync: 22 minutes ago</div>
+        </div>
+        <div class="integ-card">
+          <div class="integ-top">
+            <div class="integ-icon">GIS</div>
+            <span class="conn-dot on"><span class="d"></span>Connected</span>
+          </div>
+          <h4>GIS / Cadastral Maps</h4>
+          <p>Links extracted plot boundaries to survey-numbered cadastral map tiles for spatial verification.</p>
+          <div class="integ-meta">Last sync: 1 hour ago</div>
+        </div>
+        <div class="integ-card">
+          <div class="integ-top">
+            <div class="integ-icon">RG</div>
+            <span class="conn-dot off"><span class="d"></span>Not connected</span>
+          </div>
+          <h4>Registration Department</h4>
+          <p>Cross-checks registration numbers against sale-deed records to catch duplicate or conflicting entries.</p>
+          <button class="btn btn-ghost btn-sm" style="margin-top:6px;">Connect</button>
+        </div>
+        <div class="integ-card">
+          <div class="integ-top">
+            <div class="integ-icon">API</div>
+            <span class="conn-dot on"><span class="d"></span>Active</span>
+          </div>
+          <h4>Public API access</h4>
+          <p>Role-based API keys for downstream government applications to query validated record data.</p>
+          <div class="integ-meta">3 active keys · rate limit 600/min</div>
+        </div>
+        <div class="integ-card">
+          <div class="integ-top">
+            <div class="integ-icon">AU</div>
+            <span class="conn-dot on"><span class="d"></span>Logging</span>
+          </div>
+          <h4>Audit &amp; access control</h4>
+          <p>Every field edit, approval, and export is logged against the reviewer's role and timestamp.</p>
+          <div class="integ-meta">14,209 events this month</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section class="view" id="view-reports">
+      <div class="topbar">
+        <div>
+          <h2>Reports</h2>
+          <p class="sub">District-wise digitization throughput and where extraction errors are concentrated.</p>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head"><h4>Documents processed, by district — last 7 days</h4></div>
+          <div class="barchart" id="districtBars"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h4>Error statistics</h4></div>
+          <div class="barchart" id="errorBars"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h4>State-wise &amp; district-wise progress detail</h4></div>
+        <table>
+          <thead><tr><th>State</th><th>District</th><th>Documents processed</th><th style="width:30%">Digitization progress</th></tr></thead>
+          <tbody id="detailProgressBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="appfoot">
+      <span>NIRVIVAD · National Intelligence for Record Verification, Integrity, Validation And Anomaly Detection</span>
+      <span>Data shown is illustrative sample data for interface preview</span>
+    </footer>
+  </main>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>
