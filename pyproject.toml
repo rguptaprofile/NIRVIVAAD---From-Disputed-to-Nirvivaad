@@ -10,6 +10,3 @@ dependencies = [
     "pymongo==4.10.1",
     "python-dotenv==1.0.1",
 ]
-
-[tool.vercel]
-entrypoint = "Backend.app.main:app"
