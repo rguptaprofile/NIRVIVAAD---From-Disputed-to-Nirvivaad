@@ -2,7 +2,12 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+# Local environment configuration and secrets. Keep templates in documentation,
+# never in version control.
 .env
+.env.*
+*.env
+*.env.*
 node_modules/
 dist/
 .vscode/
