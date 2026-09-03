@@ -19,6 +19,6 @@ cd Backend
 ## Deploy
 
 - **Vercel:** import the repository with root directory unchanged. `vercel.json` builds `Frontend` and deploys only `Frontend/dist`. Set `VITE_API_BASE_URL` to the Render API URL ending in `/api/v1`, then redeploy.
-- **Render:** create a Blueprint from this repository (or a Python Web Service with root directory `Backend`). It needs an Atlas `MONGODB_URI`, a strong `JWT_SECRET_KEY`, and `ALLOWED_ORIGINS` set to the exact Vercel URL.
+- **Render:** create a Blueprint from this repository. For an existing manually-created service, leave Root Directory blank, use build command `python -m pip install --upgrade pip && python -m pip install --prefer-binary -r Backend/requirements.txt`, and start command `uvicorn render_start:app --host 0.0.0.0 --port $PORT`. It needs an Atlas `MONGODB_URI`, a strong `JWT_SECRET_KEY`, and `ALLOWED_ORIGINS` set to the exact Vercel URL.
 
 Do not use `localhost` in deployed variables. Render local disk is temporary; replace `/tmp` upload storage with GridFS or object storage before production use.
