@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+import logging
+
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,17 +13,28 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from app.api.v1.routes import router as v1_router
     from app.core.config import settings
-    from app.db.mongo import client, create_indexes
+    from app.db.mongo import create_indexes
 else:
     from .api.v1.routes import router as v1_router
     from .core.config import settings
-    from .db.mongo import client, create_indexes
+    from .db.mongo import create_indexes
+
+
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    create_indexes()
+    # A database outage or an unavailable Atlas network rule must not prevent
+    # Vercel from starting the API function. Database-backed endpoints will
+    # report their own availability through /api/v1/health.
+    try:
+        create_indexes()
+    except Exception:
+        logger.exception("MongoDB index setup failed; starting API without indexes")
     yield
-    client.close()
+    # Keep the client open for the lifetime of the serverless worker so warm
+    # invocations can reuse the connection pool.
 
 
 app = FastAPI(title="NIRVIVAAD API", version="1.0.0", lifespan=lifespan)
