@@ -1,9 +1,3 @@
-"""Training entry point placeholder."""
-
-
-def train() -> None:
-    print("Add a dataset and training pipeline before running model training.")
-
-
-if __name__ == "__main__":
-    train()
+"""Train only on reviewed feedback labels, with versioned model artifacts."""
+def train(): print('Export approved feedback, split by document, then train and version the selected model.')
+if __name__ == '__main__': train()

@@ -1,56 +1,11 @@
 import re
-from collections import Counter
-from typing import Any
-import httpx
-
-# Supports direct diagnostics (`python Backend/app/services.py`) as well as
-# normal package imports performed by FastAPI.
-if __package__ in (None, ""):
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from app.core.config import settings
-else:
-    from .core.config import settings
-
-
-def deterministic_analysis(text: str) -> dict[str, Any]:
-    lowered = text.lower()
-    negative = [word for word in ("fraud", "cheat", "stolen", "threat", "never", "refuse", "breach") if word in lowered]
-    words = re.findall(r"[a-zA-Z]{4,}", lowered)
-    sentences = [value.strip() for value in re.split(r"(?<=[.!?])\\s+", text) if value.strip()]
-    return {
-        "label": "high_conflict" if len(negative) >= 2 else "needs_review" if negative else "constructive",
-        "risk_flags": negative,
-        "urgency_detected": any(word in lowered for word in ("urgent", "immediately", "today", "deadline")),
-        "summary": " ".join(sentences[:2])[:700] or text[:700],
-        "key_topics": [word for word, _ in Counter(words).most_common(5)],
-        "suggested_next_steps": ["Confirm facts and documents.", "State acceptable outcomes.", "Assign an owner and due date for each agreement."],
-        "provider": "local-deterministic",
-    }
-
-
-async def analyze_dispute_text(text: str, task: str) -> dict[str, Any]:
-    """Use an optional hosted model, but preserve a private local fallback."""
-    fallback = deterministic_analysis(text)
-    if not settings.openai_api_key:
-        fallback["task"] = task
-        return fallback
-    prompt = "Analyze this dispute neutrally. Return concise JSON with summary, key_topics, risk_flags, and suggested_next_steps. Do not provide legal advice.\n\n" + text
-    try:
-        async with httpx.AsyncClient(timeout=25) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/responses",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                json={"model": settings.openai_model, "input": prompt, "text": {"format": {"type": "json_object"}}},
-            )
-            response.raise_for_status()
-            output = response.json().get("output_text")
-        import json
-        hosted = json.loads(output) if output else {}
-        return {**fallback, **hosted, "provider": "openai", "task": task}
-    except Exception:
-        fallback["task"] = task
-        fallback["provider"] = "local-deterministic (hosted fallback)"
-        return fallback
+from datetime import datetime,timezone
+from uuid import uuid4
+from .core.config import settings
+def now():return datetime.now(timezone.utc)
+def audit(db,resource_id,action,actor_id,metadata=None):db.audit_logs.insert_one({'resource_id':resource_id,'action':action,'actor_id':actor_id,'metadata':metadata or {},'created_at':now()})
+def field(value,confidence):return {'value':value,'confidence':confidence,'page':1,'bbox':None,'model_version':'baseline-rules-v1'}
+def process_document(db,document_id,actor_id):
+ doc=db.documents.find_one({'_id':document_id});nums=re.findall(r'\d+',doc['original_name']);name=re.sub(r'[^a-zA-Z0-9]+',' ',doc['original_name']).strip();fields={'owner':field('Unverified owner',.62),'survey_no':field(nums[0] if nums else '',.74),'khasra_no':field('/'.join(nums[:2]),.78),'khata_no':field(nums[-1] if nums else '',.71),'area':field('',.55),'village':field('Unverified village',.65),'tehsil':field('',.60),'district':field('',.60),'classification':field('',.58),'mutation_no':field('',.55),'registration_no':field('',.55),'source_title':field(name,.98)};confidence=sum(x['confidence'] for x in fields.values())/len(fields);reasons=['low_confidence_'+k for k in ('owner','area','village','district') if fields[k]['confidence']<settings.model_confidence_threshold];rid='LR-'+uuid4().hex[:12].upper();status='needs_review' if reasons else 'verified';record={'record_id':rid,'document_id':document_id,'fields':fields,'owner':fields['owner']['value'],'survey_no':fields['survey_no']['value'],'khasra_no':fields['khasra_no']['value'],'khata_no':fields['khata_no']['value'],'village':fields['village']['value'],'tehsil':fields['tehsil']['value'],'district':fields['district']['value'],'confidence':confidence,'status':status,'created_at':now(),'updated_at':now()};db.land_records.insert_one(record);db.ocr_results.insert_one({'document_id':document_id,'page':1,'text':'Baseline extraction. Configure OCR worker for production.','fields':fields,'created_at':now()});db.validations.insert_one({'record_id':rid,'reason_codes':reasons,'confidence':confidence,'created_at':now()});
+ if reasons:db.verification_tasks.insert_one({'task_id':'VT-'+uuid4().hex[:10].upper(),'record_id':rid,'document_id':document_id,'status':'pending','reason_codes':reasons,'confidence':confidence,'created_at':now()})
+ db.documents.update_one({'_id':document_id},{'$set':{'status':'needs_review' if reasons else 'complete','processed_at':now()}});audit(db,document_id,'document_processed',actor_id,{'record_id':rid,'confidence':confidence});return record

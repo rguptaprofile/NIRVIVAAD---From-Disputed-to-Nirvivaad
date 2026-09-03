@@ -1,145 +1,91 @@
-from datetime import datetime, timezone
-from typing import Annotated
+from datetime import datetime,timezone
+from pathlib import Path
+from uuid import uuid4
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pymongo.errors import DuplicateKeyError
-from ...core.realtime import manager
-from ...core.security import create_access_token, decode_access_token, hash_password, verify_password
+from fastapi import APIRouter,BackgroundTasks,Depends,File,Form,HTTPException,UploadFile
+from fastapi.security import HTTPAuthorizationCredentials,HTTPBearer
+from ...core.config import settings
+from ...core.security import create_access_token,decode_access_token,hash_password,verify_password
 from ...db.mongo import get_database
-from ...schemas import AIAnalyzeRequest, DisputeCreate, DisputeUpdate, LoginRequest, MessageCreate, RegisterRequest
-from ...services import analyze_dispute_text
-
-router = APIRouter()
-bearer = HTTPBearer(auto_error=False)
-
-
-def now(): return datetime.now(timezone.utc)
-def db(): return get_database()
-def serialize(value):
-    if isinstance(value, ObjectId): return str(value)
-    if isinstance(value, datetime): return value.isoformat()
-    if isinstance(value, list): return [serialize(x) for x in value]
-    if isinstance(value, dict): return {k: serialize(v) for k, v in value.items() if k != "password_hash"}
-    return value
-
-
-def current_user(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
-    if credentials is None: raise HTTPException(401, "Authentication required")
-    payload = decode_access_token(credentials.credentials)
-    user = db().users.find_one({"_id": ObjectId(payload["sub"])})
-    if not user: raise HTTPException(401, "User no longer exists")
-    return user
-
-
-def dispute_for_user(dispute_id: str, user: dict):
-    if not ObjectId.is_valid(dispute_id): raise HTTPException(404, "Dispute not found")
-    value = db().disputes.find_one({"_id": ObjectId(dispute_id), "participant_ids": str(user["_id"])})
-    if not value: raise HTTPException(404, "Dispute not found")
-    return value
-
-
-def audit(dispute_id, actor_id, action, metadata=None):
-    db().audit_events.insert_one({"dispute_id": dispute_id, "actor_id": actor_id, "action": action, "metadata": metadata or {}, "created_at": now()})
-
-
-@router.get("/health", tags=["system"])
-def health_check():
-    try: db().command("ping"); database = "connected"
-    except Exception: database = "unavailable"
-    return {"status": "ok", "message": "NIRVIVAAD API is online.", "database": database}
-
-
-@router.post("/auth/register", status_code=201, tags=["authentication"])
-def register(payload: RegisterRequest):
-    user = {"name": payload.name, "email": payload.email.lower(), "password_hash": hash_password(payload.password), "created_at": now()}
-    try: result = db().users.insert_one(user)
-    except DuplicateKeyError as exc: raise HTTPException(409, "An account with this email already exists") from exc
-    user["_id"] = result.inserted_id
-    return {"access_token": create_access_token(str(result.inserted_id)), "token_type": "bearer", "user": serialize(user)}
-
-
-@router.post("/auth/login", tags=["authentication"])
-def login(payload: LoginRequest):
-    user = db().users.find_one({"email": payload.email.lower()})
-    if not user or not verify_password(payload.password, user["password_hash"]): raise HTTPException(401, "Incorrect email or password")
-    return {"access_token": create_access_token(str(user["_id"])), "token_type": "bearer", "user": serialize(user)}
-
-
-@router.get("/auth/me", tags=["authentication"])
-def me(user: Annotated[dict, Depends(current_user)]): return serialize(user)
-
-
-@router.get("/dashboard", tags=["dashboard"])
-def dashboard(user: Annotated[dict, Depends(current_user)]):
-    uid = str(user["_id"])
-    counts = {item["_id"]: item["count"] for item in db().disputes.aggregate([{"$match": {"participant_ids": uid}}, {"$group": {"_id": "$status", "count": {"$sum": 1}}}])}
-    recent = list(db().disputes.find({"participant_ids": uid}).sort("updated_at", -1).limit(5))
-    return {"counts": counts, "recent_disputes": serialize(recent)}
-
-
-@router.post("/disputes", status_code=201, tags=["disputes"])
-async def create_dispute(payload: DisputeCreate, user: Annotated[dict, Depends(current_user)]):
-    people = list(db().users.find({"email": {"$in": [str(x).lower() for x in payload.participant_emails]}}, {"_id": 1, "name": 1, "email": 1}))
-    record = {"title": payload.title, "description": payload.description, "category": payload.category, "status": "open", "created_by": str(user["_id"]), "participant_ids": list({str(user["_id"]), *[str(x["_id"]) for x in people]}), "created_at": now(), "updated_at": now()}
-    result = db().disputes.insert_one(record); record["_id"] = result.inserted_id
-    audit(str(result.inserted_id), str(user["_id"]), "dispute_created")
-    data = serialize(record); await manager.broadcast(str(result.inserted_id), {"type": "dispute.created", "data": data})
-    return data
-
-
-@router.get("/disputes", tags=["disputes"])
-def list_disputes(user: Annotated[dict, Depends(current_user)], status_filter: str | None = Query(None, alias="status")):
-    query = {"participant_ids": str(user["_id"])}
-    if status_filter: query["status"] = status_filter
-    return serialize(list(db().disputes.find(query).sort("updated_at", -1)))
-
-
-@router.get("/disputes/{dispute_id}", tags=["disputes"])
-def get_dispute(dispute_id: str, user: Annotated[dict, Depends(current_user)]): return serialize(dispute_for_user(dispute_id, user))
-
-
-@router.patch("/disputes/{dispute_id}", tags=["disputes"])
-async def update_dispute(dispute_id: str, payload: DisputeUpdate, user: Annotated[dict, Depends(current_user)]):
-    dispute_for_user(dispute_id, user); changes = payload.model_dump(exclude_none=True)
-    if not changes: raise HTTPException(422, "Provide at least one field to update")
-    changes["updated_at"] = now(); db().disputes.update_one({"_id": ObjectId(dispute_id)}, {"$set": changes})
-    data = serialize(db().disputes.find_one({"_id": ObjectId(dispute_id)})); audit(dispute_id, str(user["_id"]), "dispute_updated", {"fields": list(changes)})
-    await manager.broadcast(dispute_id, {"type": "dispute.updated", "data": data}); return data
-
-
-@router.get("/disputes/{dispute_id}/messages", tags=["messages"])
-def list_messages(dispute_id: str, user: Annotated[dict, Depends(current_user)]):
-    dispute_for_user(dispute_id, user); return serialize(list(db().messages.find({"dispute_id": dispute_id}).sort("created_at", 1)))
-
-
-@router.post("/disputes/{dispute_id}/messages", status_code=201, tags=["messages"])
-async def create_message(dispute_id: str, payload: MessageCreate, user: Annotated[dict, Depends(current_user)]):
-    dispute_for_user(dispute_id, user)
-    record = {"dispute_id": dispute_id, "body": payload.body, "author": {"id": str(user["_id"]), "name": user["name"]}, "created_at": now()}
-    result = db().messages.insert_one(record); record["_id"] = result.inserted_id
-    db().disputes.update_one({"_id": ObjectId(dispute_id)}, {"$set": {"updated_at": now(), "status": "in_discussion"}}); audit(dispute_id, str(user["_id"]), "message_posted")
-    data = serialize(record); await manager.broadcast(dispute_id, {"type": "message.created", "data": data}); return data
-
-
-@router.post("/ai/analyze", tags=["ai"])
-async def analyze(payload: AIAnalyzeRequest, _: Annotated[dict, Depends(current_user)]):
-    return await analyze_dispute_text(payload.text, payload.task)
-
-
-@router.get("/disputes/{dispute_id}/audit", tags=["audit"])
-def audit_log(dispute_id: str, user: Annotated[dict, Depends(current_user)]):
-    dispute_for_user(dispute_id, user); return serialize(list(db().audit_events.find({"dispute_id": dispute_id}).sort("created_at", -1)))
-
-
-@router.websocket("/realtime/disputes/{dispute_id}")
-async def dispute_socket(websocket: WebSocket, dispute_id: str, token: str = Query()):
-    try:
-        user = db().users.find_one({"_id": ObjectId(decode_access_token(token)["sub"])}); dispute_for_user(dispute_id, user)
-        if not user: raise ValueError()
-    except Exception:
-        await websocket.close(code=1008); return
-    await manager.connect(dispute_id, websocket)
-    try:
-        while True: await websocket.receive_text()
-    except WebSocketDisconnect: manager.disconnect(dispute_id, websocket)
+from ...schemas import LoginRequest,RegisterRequest,VerificationDecision
+from ...services import audit,now,process_document
+router=APIRouter();bearer=HTTPBearer(auto_error=False)
+def db():return get_database()
+def serial(x):
+ if isinstance(x,ObjectId):return str(x)
+ if isinstance(x,datetime):return x.isoformat()
+ if isinstance(x,list):return [serial(i) for i in x]
+ if isinstance(x,dict):return {k:serial(v) for k,v in x.items() if k!='password_hash'}
+ return x
+def user(c:HTTPAuthorizationCredentials=Depends(bearer)):
+ if not c:raise HTTPException(401,'Authentication required')
+ try:u=db().users.find_one({'_id':ObjectId(decode_access_token(c.credentials)['sub'])})
+ except Exception:raise HTTPException(401,'Invalid access token')
+ if not u or not u.get('active',True):raise HTTPException(401,'User unavailable')
+ return u
+def role(*allowed):
+ def check(u=Depends(user)):
+  if u['role'] not in allowed:raise HTTPException(403,'Insufficient role permission')
+  return u
+ return check
+@router.get('/health')
+def health():
+ try:db().command('ping');database='connected'
+ except Exception:database='unavailable'
+ return {'status':'ok','database':database}
+@router.post('/auth/register',status_code=201)
+def register(p:RegisterRequest):
+ if db().users.find_one({'email':p.email.lower()}):raise HTTPException(409,'Email already registered')
+ u={'name':p.name,'email':p.email.lower(),'password_hash':hash_password(p.password),'role':p.role,'active':True,'created_at':now()};r=db().users.insert_one(u);return {'access_token':create_access_token(str(r.inserted_id)),'user':serial({**u,'_id':r.inserted_id})}
+@router.post('/auth/login')
+def login(p:LoginRequest):
+ u=db().users.find_one({'email':p.email.lower()})
+ if not u or not verify_password(p.password,u['password_hash']):raise HTTPException(401,'Incorrect email or password')
+ return {'access_token':create_access_token(str(u['_id'])),'user':serial(u)}
+@router.post('/documents/upload',status_code=201)
+async def upload(background:BackgroundTasks,files:list[UploadFile]=File(...),languages:str=Form('English'),u=Depends(role('admin','officer','operator'))):
+ if len(files)>20:raise HTTPException(422,'Maximum 20 files per batch')
+ allowed={'.pdf','.tif','.tiff','.jpg','.jpeg','.png'};root=Path(settings.upload_dir);root.mkdir(parents=True,exist_ok=True);out=[]
+ for f in files:
+  ext=Path(f.filename or '').suffix.lower()
+  if ext not in allowed:raise HTTPException(415,f'Unsupported file: {f.filename}')
+  did='DOC-'+uuid4().hex[:12].upper();target=root/f'{did}{ext}';content=await f.read()
+  if len(content)>25*1024*1024:raise HTTPException(413,'Each file must be 25 MB or smaller')
+  target.write_bytes(content);doc={'document_id':did,'original_name':f.filename,'storage_path':str(target),'content_type':f.content_type,'size_bytes':len(content),'languages':[x.strip() for x in languages.split(',') if x.strip()],'status':'queued','uploaded_by':str(u['_id']),'created_at':now()};db().documents.insert_one(doc);audit(db,did,'document_uploaded',str(u['_id']),{'filename':f.filename});background.add_task(process_document,db(),did,str(u['_id']));out.append(serial(doc))
+ return {'documents':out}
+@router.get('/documents/{document_id}')
+def document(document_id:str,u=Depends(user)):
+ d=db().documents.find_one({'document_id':document_id});
+ if not d:raise HTTPException(404,'Document not found')
+ return serial(d)
+@router.get('/dashboard/summary')
+def summary(u=Depends(user)):
+ d=db();processed=d.documents.count_documents({'status':{'$in':['complete','needs_review']}});verified=d.land_records.count_documents({'status':'verified'});pending=d.verification_tasks.count_documents({'status':'pending'});errors=d.validations.count_documents({'reason_codes':{'$ne':[]}});rate=round((verified/processed*100) if processed else 0,1);activity=list(d.audit_logs.find().sort('created_at',-1).limit(8));return {'documents_processed':processed,'verified_records':verified,'pending_tasks':pending,'error_cases':errors,'validation_pass_rate':rate,'recent_activity':serial(activity)}
+@router.get('/verification/tasks')
+def tasks(u=Depends(role('admin','officer','verifier'))):
+ rows=[]
+ for t in db().verification_tasks.find({'status':'pending'}).sort('created_at',1):
+  r=db().land_records.find_one({'record_id':t['record_id']});rows.append({'id':t['task_id'],'reason_codes':t['reason_codes'],'confidence':t['confidence'],'record':serial(r)})
+ return rows
+@router.post('/verification/{task_id}/decision')
+def decision(task_id:str,p:VerificationDecision,u=Depends(role('admin','officer','verifier'))):
+ t=db().verification_tasks.find_one({'task_id':task_id,'status':'pending'});
+ if not t:raise HTTPException(404,'Open verification task not found')
+ r=db().land_records.find_one({'record_id':t['record_id']});old=r['fields'];new=p.fields or old;flat={k:(v.get('value','') if isinstance(v,dict) else v) for k,v in new.items()};status='verified' if p.decision=='approve' else 'rejected';db().land_records.update_one({'record_id':t['record_id']},{'$set':{'fields':new,'owner':flat.get('owner',''),'khasra_no':flat.get('khasra_no',''),'khata_no':flat.get('khata_no',''),'village':flat.get('village',''),'district':flat.get('district',''),'status':status,'updated_at':now()}});db().verification_tasks.update_one({'task_id':task_id},{'$set':{'status':p.decision,'decided_at':now(),'decided_by':str(u['_id'])}});db().feedback.insert_one({'task_id':task_id,'record_id':t['record_id'],'old_fields':old,'new_fields':new,'decision':p.decision,'reason':p.reason,'actor_id':str(u['_id']),'created_at':now()});audit(db,t['record_id'],'verification_'+p.decision,str(u['_id']),{'task_id':task_id,'reason':p.reason});return {'record_id':t['record_id'],'status':status}
+@router.get('/records')
+def records(search:str='',u=Depends(user)):
+ q={'status':{'$ne':'rejected'}}
+ if search:q['$or']=[{k:{'$regex':search,'$options':'i'}} for k in ('owner','khasra_no','khata_no','village','district')]
+ return serial(list(db().land_records.find(q).sort('updated_at',-1).limit(100)))
+@router.get('/audit/{resource_id}')
+def audit_log(resource_id:str,u=Depends(user)):return serial(list(db().audit_logs.find({'resource_id':resource_id}).sort('created_at',-1)))
+@router.get('/reports/progress')
+def progress(u=Depends(user)):
+ groups={}
+ for record in db().land_records.find({}, {'state':1,'district':1,'status':1}):
+  key=(record.get('state') or 'Unassigned',record.get('district') or 'Unassigned'); groups.setdefault(key,{'records':0,'verified':0});groups[key]['records']+=1;groups[key]['verified']+=record.get('status')=='verified'
+ return [{'state':state,'district':district,'records':v['records'],'progress':round(v['verified']/v['records']*100,1)} for (state,district),v in groups.items()]
+@router.get('/reports/errors')
+def errors(u=Depends(user)):return serial(list(db().validations.aggregate([{'$unwind':'$reason_codes'},{'$group':{'_id':'$reason_codes','count':{'$sum':1}}},{'$project':{'_id':0,'reason_code':'$_id','count':1}},{'$sort':{'count':-1}}])))
+@router.get('/gis/parcels')
+def parcels(u=Depends(user)):return {'type':'FeatureCollection','features':[{'type':'Feature','id':x['parcel_id'],'geometry':x['geometry'],'properties':x.get('properties',{})} for x in db().gis_parcels.find()]}

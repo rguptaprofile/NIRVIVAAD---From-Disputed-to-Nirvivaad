@@ -1,11 +1,3 @@
-# AI/ML
+# AI/ML worker
 
-Keep model experiments separate from the live API. Production inference can later be imported by the backend through a clear service interface.
-
-```text
-AI_ML/
-  src/           reusable feature, training, and inference code
-  models/        local model artifacts
-  notebooks/     exploratory notebooks
-  tests/         model/unit tests
-```
+The prototype baseline routes uncertain values to human verification. Replace it behind `src/inference.py` with PaddleOCR, TrOCR, LayoutLM-style extraction and reference matching as data and compute become available.

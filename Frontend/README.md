@@ -1,14 +1,12 @@
-# Frontend
+# NIRVIVAAD React frontend
 
-The current client uses HTML5, CSS3, and modern browser JavaScript without a build step.
+React + Vite application for dashboard, batch upload, verification, repository audit trails and reports.
 
-```text
-Frontend/
-  index.html
-  style.css
-  script.js
-  assets/          frontend-only images/icons
-  components/      reusable fragments or future React components
+```powershell
+cd Frontend
+npm install
+Copy-Item .env.example .env
+npm run dev
 ```
 
-Set `API_BASE_URL` in `script.js` when the backend is deployed.
+Set `VITE_API_BASE_URL` to FastAPI's `/api/v1` URL. Requests require a JWT from `/auth/login`, currently stored as `nirvivaad_token` in browser local storage.
