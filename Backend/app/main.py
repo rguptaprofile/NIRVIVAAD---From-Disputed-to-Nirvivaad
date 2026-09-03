@@ -42,10 +42,16 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_cr
 app.include_router(v1_router, prefix="/api/v1")
 
 
-@app.get("/", include_in_schema=False)
-def root():
-    """Provide a useful landing page instead of a 404 for the deployment URL."""
-    return RedirectResponse(url="/docs")
+# -- This is for API routing path --
+app = FastAPI()
+@app.get("/api/v1")
+def api_root():
+    return {"message": "Nirvivaad API is working"}
+
+# @app.get("/", include_in_schema=False)
+# def root():
+#     """Provide a useful landing page instead of a 404 for the deployment URL."""
+#     return RedirectResponse(url="/docs")
 
 
 if __name__ == "__main__":
