@@ -67,6 +67,10 @@ def document(document_id:str,u=Depends(user)):
  d=db().documents.find_one({'document_id':document_id});
  if not d:raise HTTPException(404,'Document not found')
  return serial(d)
+@router.get('/documents')
+def documents(u=Depends(user)):
+ q={} if u.get('role')=='admin' else {'uploaded_by':str(u['_id'])}
+ return serial(list(db().documents.find(q).sort('created_at',-1).limit(100)))
 @router.get('/dashboard/summary')
 def summary(u=Depends(user)):
  d=db();processed=d.documents.count_documents({'status':{'$in':['complete','needs_review']}});verified=d.land_records.count_documents({'status':'verified'});pending=d.verification_tasks.count_documents({'status':'pending'});errors=d.validations.count_documents({'reason_codes':{'$ne':[]}});rate=round((verified/processed*100) if processed else 0,1);activity=list(d.audit_logs.find().sort('created_at',-1).limit(8));return {'documents_processed':processed,'verified_records':verified,'pending_tasks':pending,'error_cases':errors,'validation_pass_rate':rate,'recent_activity':serial(activity)}
