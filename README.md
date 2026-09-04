@@ -5,7 +5,7 @@ AI-assisted land-record digitization and human verification platform.
 ## Run locally
 
 1. Start MongoDB from `Database/` with `docker compose up -d`.
-2. Copy `Backend/.env.example` to `Backend/.env`; for local MongoDB use `MONGODB_URI=mongodb://localhost:27017`.
+2. Copy `Backend/.env.example` to `Backend/.env`; for local MongoDB use `MONGODB_URI=`.
 3. Start the API:
 
 ```powershell
@@ -14,7 +14,7 @@ cd Backend
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-4. Copy `Frontend/.env.example` to `Frontend/.env`, set `VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1`, then run `npm install` and `npm run dev` from `Frontend`.
+4. Copy `Frontend/.env.example` to `Frontend/.env`, set `VITE_API_BASE_URL=https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/v1`, then run `npm install` and `npm run dev` from `Frontend`.
 
 ## Deploy
 
