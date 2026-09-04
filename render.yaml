@@ -18,3 +18,5 @@ services:
         sync: false
       - key: UPLOAD_DIR
         value: /tmp/nirvivaad-uploads
+      - key: OPENAI_API_KEY
+        sync: false
