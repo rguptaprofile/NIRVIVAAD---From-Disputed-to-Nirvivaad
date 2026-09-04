@@ -36,12 +36,19 @@ def health():
 @router.post('/auth/register',status_code=201)
 def register(p:RegisterRequest):
  if db().users.find_one({'email':p.email.lower()}):raise HTTPException(409,'Email already registered')
- u={'name':p.name,'email':p.email.lower(),'password_hash':hash_password(p.password),'role':p.role,'active':True,'created_at':now()};r=db().users.insert_one(u);return {'access_token':create_access_token(str(r.inserted_id)),'user':serial({**u,'_id':r.inserted_id})}
+ # Public registration must never be able to grant administrative access.
+ u={'name':p.name,'email':p.email.lower(),'password_hash':hash_password(p.password),'role':'operator','active':True,'created_at':now()};r=db().users.insert_one(u);audit(db(),str(r.inserted_id),'user_registered',str(r.inserted_id));return {'access_token':create_access_token(str(r.inserted_id)),'user':serial({**u,'_id':r.inserted_id})}
 @router.post('/auth/login')
 def login(p:LoginRequest):
  u=db().users.find_one({'email':p.email.lower()})
  if not u or not verify_password(p.password,u['password_hash']):raise HTTPException(401,'Incorrect email or password')
+ audit(db(),str(u['_id']),'user_logged_in',str(u['_id']))
  return {'access_token':create_access_token(str(u['_id'])),'user':serial(u)}
+@router.get('/auth/me')
+def me(u=Depends(user)):return {'user':serial(u)}
+@router.get('/admin/users')
+def admin_users(u=Depends(role('admin'))):
+ return serial(list(db().users.find({}, {'password_hash':0}).sort('created_at',-1).limit(200)))
 @router.post('/documents/upload',status_code=201)
 async def upload(background:BackgroundTasks,files:list[UploadFile]=File(...),languages:str=Form('English'),u=Depends(role('admin','officer','operator'))):
  if len(files)>20:raise HTTPException(422,'Maximum 20 files per batch')

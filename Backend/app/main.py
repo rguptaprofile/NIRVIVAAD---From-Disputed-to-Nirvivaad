@@ -86,6 +86,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api.v1.routes import router as v1_router
 from .core.config import settings
 from .db.mongo import create_indexes
+from .core.security import hash_password
+from .services import now
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +100,15 @@ async def lifespan(_: FastAPI):
         logger.exception(
             "MongoDB index setup failed; starting API without indexes"
         )
+    if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
+        try:
+            from .db.mongo import get_database
+            database = get_database()
+            if not database.users.find_one({"email": settings.bootstrap_admin_email.lower()}):
+                database.users.insert_one({"name": "Platform Administrator", "email": settings.bootstrap_admin_email.lower(), "password_hash": hash_password(settings.bootstrap_admin_password), "role": "admin", "active": True, "created_at": now()})
+                logger.info("Bootstrap administrator created")
+        except Exception:
+            logger.exception("Bootstrap administrator setup failed")
 
     yield
 
