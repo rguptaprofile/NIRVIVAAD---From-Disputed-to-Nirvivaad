@@ -6,6 +6,8 @@ AI-assisted land-record digitization and human verification platform.
 
 1. Start MongoDB from `Database/` with `docker compose up -d`.
 2. Create `Backend/.env` with `MONGODB_URI=mongodb://localhost:27017`, a unique `JWT_SECRET_KEY`, and `ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`. Do not commit this file.
+
+   To enable administrator self-registration from the frontend, also set a strong `ADMIN_SIGNUP_CODE`. Only people with this invite code can create an administrator account.
 3. Start the API:
 
 ```powershell

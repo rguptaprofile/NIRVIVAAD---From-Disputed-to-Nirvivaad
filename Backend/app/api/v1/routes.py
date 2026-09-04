@@ -36,12 +36,14 @@ def health():
 @router.post('/auth/register',status_code=201)
 def register(p:RegisterRequest):
  if db().users.find_one({'email':p.email.lower()}):raise HTTPException(409,'Email already registered')
- # Public registration must never be able to grant administrative access.
- u={'name':p.name,'email':p.email.lower(),'password_hash':hash_password(p.password),'role':'operator','active':True,'created_at':now()};r=db().users.insert_one(u);audit(db(),str(r.inserted_id),'user_registered',str(r.inserted_id));return {'access_token':create_access_token(str(r.inserted_id)),'user':serial({**u,'_id':r.inserted_id})}
+ if p.role=='admin' and (not settings.admin_signup_code or p.admin_code!=settings.admin_signup_code):raise HTTPException(403,'A valid administrator invite code is required')
+ user_role='admin' if p.role=='admin' else 'operator'
+ u={'name':p.name,'email':p.email.lower(),'password_hash':hash_password(p.password),'role':user_role,'active':True,'created_at':now()};r=db().users.insert_one(u);audit(db(),str(r.inserted_id),'user_registered',str(r.inserted_id),{'role':user_role});return {'access_token':create_access_token(str(r.inserted_id)),'user':serial({**u,'_id':r.inserted_id})}
 @router.post('/auth/login')
 def login(p:LoginRequest):
  u=db().users.find_one({'email':p.email.lower()})
  if not u or not verify_password(p.password,u['password_hash']):raise HTTPException(401,'Incorrect email or password')
+ if p.role=='admin' and u.get('role')!='admin':raise HTTPException(403,'This account does not have administrator access')
  audit(db(),str(u['_id']),'user_logged_in',str(u['_id']))
  return {'access_token':create_access_token(str(u['_id'])),'user':serial(u)}
 @router.get('/auth/me')
