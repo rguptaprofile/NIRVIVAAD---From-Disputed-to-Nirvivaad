@@ -48,5 +48,8 @@ export const api = {
       if (v !== undefined && v !== null) f.append(k, v);
     });
     return request('/documents/upload', { method: 'POST', body: f });
-  }
+  },
+  locations: () => request('/government/locations'),
+  lookup: p => request('/government/lookup?' + new URLSearchParams(p).toString()),
+  integrations: () => request('/integrations/status')
 };

@@ -576,3 +576,106 @@
   border-radius: 3px;
   font-size: 11px;
 }
+
+/* Mandatory Field Highlights & Dropdowns */
+.field-box select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: #FFF;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  height: 38px;
+}
+.field-box select:focus,
+.field-box input:focus {
+  border-color: var(--ledger);
+  outline: 2px solid rgba(47, 79, 62, 0.2);
+}
+.field-box.error input,
+.field-box.error select {
+  border-color: #D32F2F !important;
+  background-color: #FFF8F8 !important;
+  box-shadow: 0 0 0 1px #D32F2F;
+}
+.req-star {
+  color: #D32F2F;
+  font-weight: 700;
+  margin-left: 3px;
+}
+.field-error-msg {
+  display: block;
+  font-size: 11px;
+  color: #D32F2F;
+  margin-top: 3px;
+  font-weight: 600;
+}
+.mandatory-error-banner {
+  background: #FCE8E6;
+  border: 1.5px solid #D32F2F;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  color: #A22718;
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: fadein 0.2s ease-in-out;
+}
+.mandatory-indicator-pill {
+  font-size: 11px;
+  font-weight: 700;
+  background: #FCE8E6;
+  color: #A22718;
+  border: 1px solid #F1ACA3;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 8px;
+}
+.field-tag-type {
+  font-size: 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  background: #E8EDE8;
+  color: #2F5943;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  font-weight: normal;
+}
+.ground-truth-preview-card {
+  margin-top: 16px;
+  background: #F4F8F5;
+  border: 1px solid #B8DAC6;
+  border-radius: 4px;
+  padding: 14px 16px;
+}
+.gt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  color: #1F4D36;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.gt-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  font-size: 12px;
+}
+.gt-field span {
+  color: var(--ink-soft);
+  display: block;
+  font-size: 10.5px;
+  text-transform: uppercase;
+}
+.gt-field b {
+  color: var(--ink);
+}
+
