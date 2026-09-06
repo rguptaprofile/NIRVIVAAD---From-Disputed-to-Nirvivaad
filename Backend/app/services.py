@@ -52,8 +52,12 @@ DOC_TYPE_LABELS = {
 
 # Authentic Hierarchical Government Land Locations (States -> Districts -> Circles -> Mauzas)
 # Covering all 36 States & Union Territories of India
-from app.locations_data import ALL_INDIAN_LOCATIONS
-from app.gis_service import get_gis_cadastral_parcel, generate_bhu_aadhaar_ulpin
+try:
+    from .locations_data import ALL_INDIAN_LOCATIONS
+    from .gis_service import get_gis_cadastral_parcel, generate_bhu_aadhaar_ulpin
+except (ImportError, ValueError):
+    from app.locations_data import ALL_INDIAN_LOCATIONS
+    from app.gis_service import get_gis_cadastral_parcel, generate_bhu_aadhaar_ulpin
 
 GOVERNMENT_LOCATIONS = ALL_INDIAN_LOCATIONS
 

@@ -95,7 +95,10 @@ def gis_parcel(
     """
     Returns authentic GIS Cadastral Boundary, Bhu-Aadhaar ULPIN, and GeoJSON parcel polygon via API Key.
     """
-    from app.gis_service import get_gis_cadastral_parcel
+    try:
+        from ...gis_service import get_gis_cadastral_parcel
+    except (ImportError, ValueError):
+        from app.gis_service import get_gis_cadastral_parcel
     return get_gis_cadastral_parcel(state, district, circle, village, khata_no, khasra_no, api_key=api_key)
 
 @router.get('/gis/status')

@@ -1,7 +1,12 @@
-"""Render entrypoint when the repository root is the service root.
+import sys
+from pathlib import Path
 
-Render imports this module with the repository root on PYTHONPATH. The FastAPI
-application itself deliberately remains in Backend/app, so local development
-and Render use the same application package.
-"""
+# Ensure repository root and Backend directory are both on sys.path for Render deployment
+_root_dir = Path(__file__).resolve().parent
+_backend_dir = _root_dir / "Backend"
+for _p in (str(_root_dir), str(_backend_dir)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 from Backend.app.main import app
+
