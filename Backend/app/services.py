@@ -51,52 +51,12 @@ DOC_TYPE_LABELS = {
 }
 
 # Authentic Hierarchical Government Land Locations (States -> Districts -> Circles -> Mauzas)
-GOVERNMENT_LOCATIONS = {
-    'Bihar': {
-        'Muzaffarpur': {
-            'Muzaffarpur Sadar': ['Kanti', 'Damodarpur', 'Mustafapur', 'Bhikhanpur', 'Japaha'],
-            'Kanti': ['Kanti Kasba', 'Bela', 'Kolhua', 'Jaitpur', 'Sarairanjan'],
-            'Motipur': ['Motipur Bazar', 'Baruraj', 'Mahmadpur', 'Patepur']
-        },
-        'Patna': {
-            'Patna Sadar': ['Digha', 'Bankipur', 'Kankarbagh', 'Rajvanshi Nagar'],
-            'Danapur': ['Danapur Cantt', 'Saguna', 'Khagaul', 'Mustafapur'],
-            'Phulwari Sharif': ['Phulwari', 'Nohsa', 'Sampatchak']
-        },
-        'Gaya': {
-            'Gaya Sadar': ['Bodhgaya', 'Tekari', 'Manpur', 'Civil Lines']
-        }
-    },
-    'Uttar Pradesh': {
-        'Lucknow': {
-            'Lucknow Sadar': ['Hazratganj', 'Alambagh', 'Gomti Nagar', 'Chowk'],
-            'Bakshi Ka Talab': ['BKT Kasba', 'Itaunja', 'Mahona']
-        },
-        'Varanasi': {
-            'Varanasi Sadar': ['Dashashwamedh', 'Bhelupur', 'Shivpur', 'Sarnath']
-        }
-    },
-    'Maharashtra': {
-        'Nashik': {
-            'Nashik Taluka': ['Ojhar', 'Deolali', 'Satpur', 'Panchavati']
-        }
-    },
-    'Karnataka': {
-        'Belagavi': {
-            'Belagavi Taluka': ['Yadgir', 'Vadgaon', 'Shahapur', 'Tilakwadi']
-        }
-    },
-    'Rajasthan': {
-        'Jaipur': {
-            'Jaipur Tehsil': ['Sanganer', 'Amer', 'Jhotwara', 'Malviya Nagar']
-        }
-    },
-    'West Bengal': {
-        'Howrah': {
-            'Howrah Sadar': ['Bally', 'Shibpur', 'Uluberia', 'Liluah']
-        }
-    }
-}
+# Covering all 36 States & Union Territories of India
+from app.locations_data import ALL_INDIAN_LOCATIONS
+from app.gis_service import get_gis_cadastral_parcel, generate_bhu_aadhaar_ulpin
+
+GOVERNMENT_LOCATIONS = ALL_INDIAN_LOCATIONS
+
 
 # Real On-Record Cadastral Registry (Modeled directly on Bihar Bhumi / DILRMP / Revenue Dept Registers)
 OFFICIAL_CADASTRAL_REGISTRY = {
@@ -663,6 +623,7 @@ def process_document(db, document_id, actor_id):
     )
 
     ground_truth = get_official_registry_ground_truth(database, state, district, circle, village, khata_no, khasra_no)
+    gis_parcel = get_gis_cadastral_parcel(state, district, circle, village, khata_no, khasra_no)
     eval_report = evaluate_with_openai_or_rules(metadata, ground_truth, doc.get('original_name', ''))
 
     time.sleep(0.7)
@@ -686,11 +647,14 @@ def process_document(db, document_id, actor_id):
         'forgery_risk_score': eval_report['forgery_risk_score'],
         'status': final_status,
         'ground_truth': ground_truth,
+        'gis_parcel': gis_parcel,
+        'ulpin': gis_parcel.get('ulpin'),
         'validation_report': eval_report,
         'field_confidences': eval_report.get('field_confidences', {}),
         'audit_trail': [
             f"Digitized from scanned {DOC_TYPE_LABELS.get(doc_type, 'document')} — just now",
             f"5-point validation executed: Authenticity Score {eval_report['authenticity_score']}%",
+            f"Bhu-Aadhaar (ULPIN) generated: {gis_parcel.get('ulpin')}",
             f"Cross-referenced with on-record Government Cadastral Registry ({state} DILRMP)"
         ],
         'created_at': now(),

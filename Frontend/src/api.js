@@ -51,5 +51,8 @@ export const api = {
   },
   locations: () => request('/government/locations'),
   lookup: p => request('/government/lookup?' + new URLSearchParams(p).toString()),
-  integrations: () => request('/integrations/status')
+  integrations: () => request('/integrations/status'),
+  gisParcel: p => request('/gis/parcel?' + new URLSearchParams(p).toString()),
+  gisStatus: () => request('/gis/status')
 };
+
