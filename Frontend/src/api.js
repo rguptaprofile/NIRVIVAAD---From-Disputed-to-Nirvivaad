@@ -49,6 +49,8 @@ export const api = {
   errors: () => request('/reports/errors'),
   tasks: () => request('/verification/tasks'),
   users: () => request('/admin/users'),
+  adminOverview: () => request('/admin/overview'),
+  adminUpdateUser: (userId, p) => request(`/admin/users/${userId}`, { method: 'PATCH', body: JSON.stringify(p) }),
   decision: (id, p) => request(`/verification/${id}/decision`, { method: 'POST', body: JSON.stringify(p) }),
   upload: (files, languages, meta = {}) => {
     const f = new FormData();
