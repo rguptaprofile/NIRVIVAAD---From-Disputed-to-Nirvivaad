@@ -359,7 +359,7 @@ def decision(task_id: str, p: VerificationDecision, u = Depends(role('admin', 'o
 def records(search: str = '', u = Depends(user)):
     q = {'status': {'$ne': 'rejected'}}
     if search:
-        q['$or'] = [{k: {'$regex': search, '$options': 'i'}} for k in ('owner', 'khasra_no', 'khata_no', 'village', 'district')]
+        q['$or'] = [{k: {'$regex': search, '$options': 'i'}} for k in ('owner', 'khasra_no', 'khata_no', 'village', 'district', 'record_id', 'ulpin')]
     return serial(list(db().land_records.find(q).sort('updated_at', -1).limit(100)))
 
 @router.get('/audit/{resource_id}')
@@ -394,3 +394,114 @@ def errors(u = Depends(user)):
 @router.get('/gis/parcels')
 def parcels(u = Depends(user)):
     return {'type': 'FeatureCollection', 'features': [{'type': 'Feature', 'id': x.get('parcel_id', str(x['_id'])), 'geometry': x.get('geometry', {}), 'properties': x.get('properties', {})} for x in db().gis_parcels.find()]}
+
+
+@router.get('/government/registry-lookup')
+def registry_lookup(
+    state: str = 'Bihar',
+    district: str = 'Patna',
+    circle: str = 'Patna Sadar',
+    village: str = 'Jhauganj',
+    khata_no: str = '57',
+    khasra_no: str = '4326',
+    claimed_owner: str = None,
+    area: str = None,
+    mode: str = 'normal',
+    u = Depends(user)
+):
+    """
+    Live API lookup against connected official state government land registry portal.
+    Fetches official RoR, Jamabandi Panji-II, surveyed area, Bhu-Aadhaar ULPIN, and legal status.
+    """
+    try:
+        from ...government_registry_service import fetch_official_government_record
+    except (ImportError, ValueError):
+        from app.government_registry_service import fetch_official_government_record
+
+    rec = fetch_official_government_record(
+        db(), state, district, circle, village, khata_no, khasra_no,
+        claimed_owner=claimed_owner, claimed_area=area, mode=mode
+    )
+    return {'success': True, 'ground_truth': rec}
+
+
+@router.get('/government/portals')
+def government_portals(u = Depends(user)):
+    """
+    Lists all connected state government land registry portals across India.
+    """
+    try:
+        from ...government_registry_service import STATE_GOV_PORTALS
+    except (ImportError, ValueError):
+        from app.government_registry_service import STATE_GOV_PORTALS
+    return {'portals': STATE_GOV_PORTALS}
+
+
+@router.post('/records/{record_id}/verify')
+def verify_record(record_id: str, p: dict, u = Depends(user)):
+    """
+    Inbuilt Human Verification & Review Endpoint:
+    Allows Revenue Officers, Verifiers, and Admins to inspect, correct, and certify land records.
+    Decisions:
+    - 'approve': Certifies title as 'verified' (Nirvivaad), adds digital certification seal.
+    - 'reject': Flags title as 'rejected' / 'disputed' (Vivaadit).
+    - 'survey_requested': Flags title for physical Amin field inspection.
+    """
+    decision = p.get('decision', 'approve')
+    remarks = p.get('remarks') or ('Title verified and certified against official state land registry.' if decision == 'approve' else 'Title rejected due to discrepancy with on-record government land registry.')
+    officer_name = p.get('officer_name') or u.get('name') or 'Revenue Officer'
+    corrected_fields = p.get('corrected_fields', {})
+
+    r = db().land_records.find_one({'record_id': record_id})
+    if not r:
+        raise HTTPException(404, 'Land record not found')
+
+    new_status = 'verified' if decision == 'approve' else ('rejected' if decision == 'reject' else 'survey_requested')
+    verdict = "Nirvivaad (Human Verified & Certified Title)" if decision == 'approve' else (
+        "Vivaadit (Disputed / Rejected by Revenue Officer)" if decision == 'reject' else "Survey Requested (Physical Field Inspection Pending)"
+    )
+
+    update_payload = {
+        'status': new_status,
+        'human_verified': True,
+        'verified_by': str(u.get('_id')),
+        'verifier_name': officer_name,
+        'verification_remarks': remarks,
+        'verified_at': now(),
+        'updated_at': now()
+    }
+    if corrected_fields:
+        for k, v in corrected_fields.items():
+            if v and str(v).strip():
+                update_payload[k] = str(v).strip()
+
+    audit_entry = f"Human Verification: {decision.upper()} by {officer_name} on {now().strftime('%d-%b-%Y %H:%M UTC')} — Remarks: {remarks}"
+
+    db().land_records.update_one(
+        {'record_id': record_id},
+        {
+            '$set': update_payload,
+            '$push': {'audit_trail': audit_entry}
+        }
+    )
+
+    if r.get('document_id'):
+        db().documents.update_one(
+            {'document_id': r['document_id']},
+            {'$set': {'status': new_status, 'verified_at': now()}}
+        )
+
+    db().verification_tasks.update_many(
+        {'record_id': record_id},
+        {'$set': {'status': 'approved' if decision == 'approve' else 'rejected', 'decided_at': now(), 'decided_by': str(u.get('_id'))}}
+    )
+
+    audit(db(), record_id, f"human_verification_{decision}", str(u.get('_id')), {
+        'decision': decision,
+        'remarks': remarks,
+        'officer_name': officer_name,
+        'new_status': new_status
+    })
+
+    updated = db().land_records.find_one({'record_id': record_id})
+    return {'success': True, 'record': serial(updated), 'status': new_status}

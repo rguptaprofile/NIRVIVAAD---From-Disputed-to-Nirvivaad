@@ -22,6 +22,15 @@ async function request(path, options = {}) {
   }
 
   const b = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    if (!path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
+      localStorage.removeItem('nirvivaad_token');
+      localStorage.removeItem('nirvivaad_user');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nirvivaad_session_expired', { detail: b.detail || 'Session expired' }));
+      }
+    }
+  }
   if (!r.ok) throw new Error(b.detail || 'Request failed');
   return b;
 }
@@ -35,6 +44,7 @@ export const api = {
   documentStatus: id => request(`/documents/${id}`),
   documentReport: id => request(`/documents/${id}/report`),
   records: q => request('/records' + (q ? `?search=${encodeURIComponent(q)}` : '')),
+  verifyRecord: (recordId, p) => request(`/records/${recordId}/verify`, { method: 'POST', body: JSON.stringify(p) }),
   progress: () => request('/reports/progress'),
   errors: () => request('/reports/errors'),
   tasks: () => request('/verification/tasks'),
@@ -51,6 +61,8 @@ export const api = {
   },
   locations: () => request('/government/locations'),
   lookup: p => request('/government/lookup?' + new URLSearchParams(p).toString()),
+  govRegistryLookup: p => request('/government/registry-lookup?' + new URLSearchParams(p).toString()),
+  govPortals: () => request('/government/portals'),
   integrations: () => request('/integrations/status'),
   gisParcel: p => request('/gis/parcel?' + new URLSearchParams(p).toString()),
   gisStatus: () => request('/gis/status')

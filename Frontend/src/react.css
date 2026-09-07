@@ -831,3 +831,440 @@
 }
 
 
+
+/* =========================================================
+   INBUILT HUMAN VERIFICATION CONSOLE & GOV LOOKUP STYLES
+   ========================================================= */
+
+/* Human Verification Modal Backdrop */
+.hv-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 38, 30, 0.72);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.hv-modal-dialog {
+  background: #FCFCF9;
+  width: min(960px, 95vw);
+  max-height: 90vh;
+  border-radius: 8px;
+  box-shadow: 0 24px 64px rgba(18, 38, 30, 0.35);
+  border: 1px solid #D8E2DA;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: hv-slideup 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes hv-slideup {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hv-modal-header {
+  padding: 18px 24px;
+  background: linear-gradient(135deg, #183E31, #245A48);
+  color: #FFF;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hv-modal-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hv-modal-header .hv-rec-id {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.hv-btn-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.hv-btn-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #FFF;
+}
+
+.hv-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Side-by-Side Comparison Box */
+.hv-comparison-box {
+  background: #FFF;
+  border: 1px solid #DCE6DE;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.hv-comp-header {
+  padding: 12px 18px;
+  background: #F3F7F4;
+  border-bottom: 1px solid #DCE6DE;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1A3C30;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hv-comp-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr 110px;
+  font-size: 12px;
+  border-bottom: 1px solid #EEF3EF;
+  align-items: center;
+}
+.hv-comp-grid.head {
+  background: #F8FAF8;
+  font-weight: 700;
+  color: #4A6356;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 16px;
+  border-bottom: 1px solid #E2ECE4;
+}
+.hv-comp-grid:not(.head) {
+  padding: 10px 16px;
+}
+.hv-comp-grid:last-child {
+  border-bottom: none;
+}
+.hv-comp-grid:hover:not(.head) {
+  background: #FAFCFA;
+}
+
+.hv-field-name {
+  font-weight: 600;
+  color: #2F4B3E;
+}
+.hv-val-claimed {
+  color: #1C332A;
+  padding-right: 12px;
+}
+.hv-val-gov {
+  color: #164835;
+  font-weight: 500;
+  padding-right: 12px;
+}
+.hv-match-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+.hv-match-badge.matched {
+  background: #D8F2E1;
+  color: #156B3A;
+}
+.hv-match-badge.mismatch {
+  background: #FCE6E2;
+  color: #A32D1C;
+}
+.hv-match-badge.notice {
+  background: #FFF2D6;
+  color: #8C5B00;
+}
+
+/* Security & Fraud Check Cards Grid */
+.hv-fraud-checks-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.hv-check-card {
+  background: #FFF;
+  border: 1px solid #DBE5DE;
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.hv-check-card .title {
+  font-size: 11px;
+  color: #5D7569;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.hv-check-card .val {
+  font-size: 14px;
+  font-weight: 700;
+  color: #183C2F;
+}
+.hv-check-card .val.green { color: #166D3B; }
+.hv-check-card .val.amber { color: #B36800; }
+.hv-check-card .val.red { color: #B52818; }
+
+/* Cadastral GIS Bar */
+.hv-gis-bar {
+  background: #183C2F;
+  color: #FFF;
+  border-radius: 6px;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hv-gis-bar .ulpin-num {
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.12em;
+  font-size: 14px;
+  font-weight: 700;
+  color: #E2BA82;
+}
+
+/* Officer Decision Panel */
+.hv-decision-panel {
+  background: #F3F8F5;
+  border: 1px solid #CDDFD3;
+  border-radius: 6px;
+  padding: 18px;
+}
+.hv-decision-panel h4 {
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1A4032;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hv-inputs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.hv-input-group label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #39574A;
+  margin-bottom: 4px;
+}
+.hv-input-group input,
+.hv-input-group textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #CCDCD1;
+  border-radius: 4px;
+  font-size: 12.5px;
+  color: #17382B;
+  background: #FFF;
+  font-family: inherit;
+}
+.hv-actions-bar {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.hv-btn-approve {
+  background: #1A6945;
+  color: #FFF;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(26, 105, 69, 0.25);
+  transition: all 0.18s;
+}
+.hv-btn-approve:hover {
+  background: #145638;
+}
+.hv-btn-reject {
+  background: #C4382A;
+  color: #FFF;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.hv-btn-reject:hover {
+  background: #A82D20;
+}
+.hv-btn-survey {
+  background: #FFF;
+  color: #3F5E50;
+  border: 1px solid #CCDCD1;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.hv-btn-survey:hover {
+  background: #F4F8F5;
+}
+
+/* =========================================================
+   LIVE GOVERNMENT REGISTRY LOOKUP BANNER IN UPLOAD VIEW
+   ========================================================= */
+.glc-container {
+  margin: 18px 0;
+  border: 1px solid #CFDFD4;
+  border-radius: 6px;
+  background: #F7FAF8;
+  overflow: hidden;
+}
+.glc-header {
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #EDF4F0;
+  border-bottom: 1px solid #CFDFD4;
+}
+.glc-title-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.glc-seal {
+  font-size: 24px;
+}
+.glc-title-box b {
+  font-size: 13.5px;
+  color: #173D2F;
+  display: block;
+}
+.glc-title-box small {
+  font-size: 11.5px;
+  color: #4A6E5D;
+}
+.glc-query-btn {
+  background: #1B5742;
+  color: #FFF;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+.glc-query-btn:hover:not(:disabled) {
+  background: #144433;
+}
+.glc-query-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.glc-body {
+  padding: 16px 18px;
+  background: #FFF;
+}
+.glc-data-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+.glc-cell {
+  background: #F9FCFA;
+  border: 1px solid #E2EBE5;
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+.glc-cell span {
+  display: block;
+  font-size: 10.5px;
+  color: #5D776B;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.glc-cell b {
+  display: block;
+  color: #1A3D2F;
+  font-size: 12.5px;
+  margin-top: 3px;
+}
+.glc-footer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #EAEFEA;
+  padding-top: 12px;
+}
+.glc-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: #E1F4E7;
+  color: #156A3A;
+}
+.glc-sync-btn {
+  background: #EAF4EE;
+  border: 1px solid #1B5742;
+  color: #1B5742;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.glc-sync-btn:hover {
+  background: #1B5742;
+  color: #FFF;
+}
+
+@media(max-width: 768px) {
+  .hv-comp-grid {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .hv-comp-grid.head {
+    display: none;
+  }
+  .hv-fraud-checks-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .glc-data-grid {
+    grid-template-columns: 1fr;
+  }
+}
