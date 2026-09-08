@@ -24,13 +24,53 @@ STATE_CODES = {
 
 # Authentic Regional Geospatial Centroids (Lat, Long)
 REGIONAL_COORDINATES = {
-    # Bihar
-    ("Bihar", "Muzaffarpur"): (26.1197, 85.3910),
-    ("Bihar", "Patna"): (25.5941, 85.1376),
-    ("Bihar", "Gaya"): (24.7914, 85.0002),
+    # Bihar (All 38 Districts)
+    ("Bihar", "Araria"): (26.1497, 87.5218),
+    ("Bihar", "Arwal"): (25.2442, 84.6738),
+    ("Bihar", "Aurangabad"): (24.7539, 84.3736),
+    ("Bihar", "Banka"): (24.8858, 86.9234),
+    ("Bihar", "Begusarai"): (25.4182, 86.1272),
     ("Bihar", "Bhagalpur"): (25.2425, 86.9842),
+    ("Bihar", "Bhojpur"): (25.5541, 84.6667),
+    ("Bihar", "Bhojpur (Ara)"): (25.5541, 84.6667),
+    ("Bihar", "Buxar"): (25.5647, 83.9777),
     ("Bihar", "Darbhanga"): (26.1542, 85.8918),
+    ("Bihar", "East Champaran"): (26.6470, 84.9089),
+    ("Bihar", "East Champaran (Motihari)"): (26.6470, 84.9089),
+    ("Bihar", "Gaya"): (24.7914, 85.0002),
+    ("Bihar", "Gopalganj"): (26.4674, 84.4447),
+    ("Bihar", "Jamui"): (24.9213, 86.2238),
+    ("Bihar", "Jehanabad"): (25.2138, 84.9866),
+    ("Bihar", "Kaimur"): (25.0449, 83.6146),
+    ("Bihar", "Kaimur (Bhabua)"): (25.0449, 83.6146),
+    ("Bihar", "Katihar"): (25.5434, 87.5647),
+    ("Bihar", "Khagaria"): (25.5036, 86.4746),
+    ("Bihar", "Kishanganj"): (26.1027, 87.9472),
+    ("Bihar", "Lakhisarai"): (25.1764, 86.0945),
+    ("Bihar", "Madhepura"): (25.9264, 86.7909),
+    ("Bihar", "Madhubani"): (26.3547, 86.0718),
+    ("Bihar", "Munger"): (25.3757, 86.4744),
+    ("Bihar", "Muzaffarpur"): (26.1197, 85.3910),
+    ("Bihar", "Nalanda"): (25.2036, 85.5174),
+    ("Bihar", "Nalanda (Bihar Sharif)"): (25.2036, 85.5174),
+    ("Bihar", "Nawada"): (24.8872, 85.5422),
+    ("Bihar", "Patna"): (25.5941, 85.1376),
     ("Bihar", "Purnia"): (25.7771, 87.4753),
+    ("Bihar", "Rohtas"): (24.9504, 84.0152),
+    ("Bihar", "Rohtas (Sasaram)"): (24.9504, 84.0152),
+    ("Bihar", "Saharsa"): (25.8835, 86.5947),
+    ("Bihar", "Samastipur"): (25.8629, 85.7811),
+    ("Bihar", "Saran"): (25.7796, 84.7499),
+    ("Bihar", "Saran (Chhapra)"): (25.7796, 84.7499),
+    ("Bihar", "Sheikhpura"): (25.1384, 85.8524),
+    ("Bihar", "Sheohar"): (26.5165, 85.2952),
+    ("Bihar", "Sitamarhi"): (26.5944, 85.4893),
+    ("Bihar", "Siwan"): (26.2201, 84.3567),
+    ("Bihar", "Supaul"): (26.1260, 86.5989),
+    ("Bihar", "Vaishali"): (25.6858, 85.2154),
+    ("Bihar", "Vaishali (Hajipur)"): (25.6858, 85.2154),
+    ("Bihar", "West Champaran"): (26.7975, 84.5033),
+    ("Bihar", "West Champaran (Bettiah)"): (26.7975, 84.5033),
     # Uttar Pradesh
     ("Uttar Pradesh", "Lucknow"): (26.8467, 80.9462),
     ("Uttar Pradesh", "Varanasi"): (25.3176, 82.9739),
@@ -134,6 +174,13 @@ def get_gis_cadastral_parcel(
     """
     # Base centroid lookup with deterministic jitter based on khata and khasra
     base_coord = REGIONAL_COORDINATES.get((state, district))
+    if not base_coord and district and "(" in district:
+        base_coord = REGIONAL_COORDINATES.get((state, district.split("(")[0].strip()))
+    if not base_coord and state and district:
+        for (st, dst), coord in REGIONAL_COORDINATES.items():
+            if st.lower() == state.lower() and (dst.lower() in district.lower() or district.lower() in dst.lower()):
+                base_coord = coord
+                break
     if not base_coord:
         # Fallback to state capital or generic coord
         base_coord = (25.5000, 85.0000)

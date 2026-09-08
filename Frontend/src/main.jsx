@@ -1122,7 +1122,7 @@ function Upload({ refresh }) {
           <div className={`field-box ${formErrors.district ? 'error' : ''}`}>
             <label>District <span className="req-star">*</span> <span className="field-tag-type">Choose</span></label>
             <select value={selectedDistrict} onChange={handleDistrictChange} disabled={!selectedState}>
-              <option value="">{selectedState ? '-- Select District --' : '-- Choose State First --'}</option>
+              <option value="">{selectedState ? `-- Select District (${districtsList.length} Districts Available) --` : '-- Choose State First --'}</option>
               {districtsList.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
             {formErrors.district && <span className="field-error-msg">District is mandatory</span>}
