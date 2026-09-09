@@ -1493,3 +1493,204 @@
   margin-top: 14px;
 }
 
+
+/* Non-Land Document Rejection Banner */
+.non-land-rejection-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: #FFF3F0;
+  border: 1.5px solid #F28B79;
+  border-left: 6px solid #D32F2F;
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(211, 47, 47, 0.12);
+  animation: shakeAlert 0.4s ease-in-out;
+}
+@keyframes shakeAlert {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+.non-land-rejection-banner .rej-icon {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.non-land-rejection-banner .rej-content {
+  flex: 1;
+}
+.non-land-rejection-banner .rej-content b {
+  display: block;
+  font-size: 14.5px;
+  color: #B71C1C;
+  margin-bottom: 4px;
+}
+.non-land-rejection-banner .rej-content p {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #5C2318;
+}
+.non-land-rejection-banner .rej-content small {
+  display: block;
+  font-size: 11.5px;
+  color: #8C3020;
+}
+.non-land-rejection-banner .rej-close-btn {
+  background: transparent;
+  border: 1px solid #E59F94;
+  color: #B71C1C;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.non-land-rejection-banner .rej-close-btn:hover {
+  background: #FFE5E0;
+}
+
+/* Bansawali & Power of Attorney Title Chain Card */
+.bansawali-card {
+  background: #FAFDFB;
+  border: 1px solid #C4DEC9;
+  border-radius: 8px;
+  padding: 18px;
+  margin-top: 20px;
+  box-shadow: 0 4px 14px rgba(27, 67, 50, 0.05);
+}
+.bansawali-card .b-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #DFEDE3;
+  margin-bottom: 16px;
+}
+.bansawali-card .b-head .b-icon {
+  font-size: 20px;
+}
+.bansawali-tree-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 8px 4px;
+}
+.tree-tier-card {
+  flex: 1;
+  min-width: 210px;
+  background: #FFFFFF;
+  border: 1px solid #D2E4D6;
+  border-radius: 6px;
+  padding: 12px;
+  position: relative;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+}
+.tree-tier-card.highlight-tier {
+  border-color: #2D6A4F;
+  background: #F4F9F5;
+  box-shadow: 0 3px 10px rgba(45, 106, 79, 0.1);
+}
+.tree-tier-card .tier-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #406854;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.tree-tier-card .tier-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #173E2F;
+  margin-bottom: 4px;
+}
+.tree-tier-card .tier-meta {
+  font-size: 11px;
+  color: #5C7A6D;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+.tree-tier-card .tier-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: #EAEFEA;
+  color: #385747;
+}
+.tree-tier-card .tier-tag.green {
+  background: #DCF4E3;
+  color: #166E3C;
+}
+.tree-arrow {
+  font-size: 18px;
+  color: #40916C;
+  font-weight: 900;
+  flex-shrink: 0;
+  user-select: none;
+}
+.poa-status-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #DFEDE3;
+}
+.poa-status-bar .ps-box {
+  background: #FFFFFF;
+  border: 1px solid #E1ECE4;
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+.poa-status-bar .ps-lbl {
+  display: block;
+  font-size: 10.5px;
+  color: #5C7A6D;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.poa-status-bar .ps-val {
+  display: block;
+  font-size: 12px;
+  color: #163C2E;
+}
+.poa-status-bar .ps-val.green {
+  color: #1B7A42;
+}
+
+/* Dashboard GIS & Human Verification Enhancements */
+.dash-gis-container {
+  margin-top: 24px;
+  background: #FFFFFF;
+  border: 1px solid #D1E2D7;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 18px rgba(27, 67, 50, 0.05);
+}
+.dash-verify-section {
+  margin-top: 24px;
+}
+.dash-verify-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #FFFFFF;
+  border: 1px solid #E2ECE5;
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+.dash-verify-card:hover {
+  border-color: #2D6A4F;
+}

@@ -267,6 +267,14 @@ async def upload(
 
         # Autonomous AI extraction on the file
         extracted = extract_cadastral_intelligence(str(target), f.filename, content, user_hints=user_meta)
+        if not extracted.get('is_land_document', True):
+            if target.exists():
+                try: target.unlink()
+                except Exception: pass
+            raise HTTPException(
+                status_code=400,
+                detail=extracted.get('error', 'Upload rejected: Invalid document. Please upload valid land-related documents only (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney, Dakhil Kharij).')
+            )
         merged_meta = {**extracted, **user_meta}
 
         doc = {
@@ -310,6 +318,11 @@ async def analyze_document_preview(
     temp_path.write_bytes(content)
     try:
         extracted = extract_cadastral_intelligence(str(temp_path), file.filename, content)
+        if not extracted.get('is_land_document', True):
+            raise HTTPException(
+                status_code=400,
+                detail=extracted.get('error', 'Upload rejected: Invalid document. Please upload valid land-related documents only (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney, Dakhil Kharij).')
+            )
         st = extracted.get('state', 'Bihar')
         portal_name = "BiharBhumi Portal - Revenue & Land Reforms Dept" if st == 'Bihar' else f"{st} Land Records Management System"
         extracted['portal_connected'] = portal_name

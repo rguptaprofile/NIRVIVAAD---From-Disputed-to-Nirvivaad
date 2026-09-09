@@ -427,6 +427,24 @@ def evaluate_with_openai_or_rules(metadata, ground_truth, doc_name):
             'match': 'Flagged (Double Selling Risk)' if has_multiple_buyers else 'Nirvivaad (Single Title)'
         },
         {
+            'field': 'Bansawali Lineage Chain (Dadaji -> Pitaji -> Children)',
+            'uploaded': f"{metadata.get('bansawali', {}).get('generation_1_ancestor', {}).get('name', 'Ancestral Raiyat')} -> {metadata.get('bansawali', {}).get('generation_2_heir', {}).get('name', 'Mutated Heir')} -> {metadata.get('bansawali', {}).get('generation_3_claimant', {}).get('name', claimed_owner or 'Claimant')}",
+            'registry': f"{metadata.get('bansawali', {}).get('generation_1_ancestor', {}).get('name', 'Original Raiyat')} (RoR) -> {official_owner} (Panji-II)",
+            'match': 'Matched (Succession Chain Valid)' if owner_match else 'Succession Check Required'
+        },
+        {
+            'field': 'Batwara (Partition Share / Hissa) Standing',
+            'uploaded': metadata.get('bansawali', {}).get('generation_3_claimant', {}).get('partition_standing', 'Legitimate Partitioned Share'),
+            'registry': 'Jamabandi Panji-II Mutated Share',
+            'match': 'Valid Partition' if 'Valid Batwara' in metadata.get('bansawali', {}).get('generation_3_claimant', {}).get('partition_standing', '') else 'Notice (Co-sharer Ejmali)'
+        },
+        {
+            'field': 'Power of Attorney (PoA) Holder Authorization',
+            'uploaded': f"Agent: {metadata.get('bansawali', {}).get('power_of_attorney_audit', {}).get('attorney_holder', poa_holder or 'Direct Raiyat')} | Principal: {metadata.get('bansawali', {}).get('power_of_attorney_audit', {}).get('principal_grantor', claimed_owner)}",
+            'registry': f"Authorized Agent: {ground_truth.get('authorized_poa_holder', 'None')}",
+            'match': 'Authorized Agent' if poa_status != "Conflicting / Rival Claim" else 'Unauthorized Rival PoA'
+        },
+        {
             'field': 'Power of Attorney Status',
             'uploaded': poa_holder or 'Direct Raiyat',
             'registry': ground_truth.get('authorized_poa_holder', 'None'),
@@ -458,6 +476,7 @@ def evaluate_with_openai_or_rules(metadata, ground_truth, doc_name):
         'verdict': verdict,
         'overall_status': overall_status,
         'field_confidences': field_confidences,
+        'bansawali': metadata.get('bansawali', {}),
         'fake_check': {
             'is_fake': forgery_risk > 50.0,
             'stamp_verified': stamp_verified,
@@ -532,6 +551,54 @@ def process_document(db, document_id, actor_id):
     # Autonomous AI/ML Cadastral Extraction on the uploaded file
     extracted_intel = extract_cadastral_intelligence(file_path, original_name, user_hints=user_hints)
 
+    # STRICT GATEKEEPER: Check if file is a non-land document (e.g. medical lab report, invoice)
+    if not extracted_intel.get('is_land_document', True):
+        rejection_msg = extracted_intel.get('error') or "Upload rejected: Non-land document submitted. Please upload land-related documents only."
+        rejection_report = {
+            'authenticity_score': 0.0,
+            'forgery_risk_score': 100.0,
+            'verdict': 'REJECTED: Non-Land Document Uploaded',
+            'rejection_reason': rejection_msg,
+            'is_land_document': False,
+            'fake_check': {
+                'is_fake': True,
+                'sub_registrar_seal': 'No Cadastral Seal (Non-Land Document)',
+                'tampering_flags': ['Non-cadastral document detected (Medical Lab Report / General Document)', rejection_msg]
+            },
+            'dispute_check': {'is_disputed': False, 'dispute_severity': 'REJECTED', 'cases': []},
+            'multiple_buyers_check': {'has_multiple_buyers': False, 'alert': 'N/A — Document Rejected'},
+            'poa_check': {'poa_status': 'Not Applicable', 'alert': 'N/A'},
+            'comparison_table': [
+                {
+                    'field': 'Document Classification',
+                    'uploaded': 'Non-Land Document (Medical Lab Report / General File)',
+                    'registry': 'Only Official Cadastral Land Records Accepted',
+                    'match': 'CRITICAL REJECTION'
+                },
+                {
+                    'field': 'Rejection Reason',
+                    'uploaded': rejection_msg,
+                    'registry': 'Accepted: Khatihan, Lagan Rasid, Kewala, PoA, Dakhil Kharij',
+                    'match': 'REJECTED'
+                }
+            ]
+        }
+        database.documents.update_one(
+            {'document_id': document_id},
+            {'$set': {
+                'current_step': 5,
+                'status': 'rejected',
+                'step_name': 'Rejected: Non-Land Document',
+                'rejection_reason': rejection_msg,
+                'validation_report': rejection_report,
+                'extracted_intelligence': extracted_intel,
+                'processed_at': now(),
+                'updated_at': now()
+            }}
+        )
+        audit(database, document_id, 'document_rejected_non_land', actor_id, {'reason': rejection_msg})
+        return None
+
     doc_type = extracted_intel['document_type']
     state = extracted_intel['state']
     district = extracted_intel['district']
@@ -559,7 +626,8 @@ def process_document(db, document_id, actor_id):
         'area': area,
         'deed_number': deed_number,
         'poa_holder_name': poa_holder_name,
-        'land_classification': land_classification
+        'land_classification': land_classification,
+        'bansawali': extracted_intel.get('bansawali', {})
     }
 
     # Step 1: Uploaded (Completed)
