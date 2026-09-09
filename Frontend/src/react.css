@@ -1405,3 +1405,91 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* AI Document Intelligence Card */
+.ai-extract-card {
+  background: linear-gradient(135deg, #F4F9F6 0%, #FFFFFF 100%);
+  border: 1px solid #C4DFC8;
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin: 18px 0;
+  box-shadow: 0 4px 16px rgba(27, 87, 66, 0.08);
+}
+.ai-extract-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #DFEDE2;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #E1F4E8;
+  color: #145938;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid #B8E4C5;
+}
+.ai-confidence-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #166E3C;
+  background: #DCF4E3;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.ai-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ai-field-box {
+  background: #FFFFFF;
+  border: 1px solid #E3ECE6;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.ai-field-box span {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #557867;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.ai-field-box b {
+  font-size: 13px;
+  color: #183C2F;
+}
+.fine-tune-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #F1F6F3;
+  border: 1px solid #CCE0D3;
+  color: #215A45;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fine-tune-toggle-btn:hover {
+  background: #E6EFE9;
+}
+.fine-tune-box {
+  background: #FAFDFB;
+  border: 1px dashed #BFDAC8;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 14px;
+}
+

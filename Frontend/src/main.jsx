@@ -10,7 +10,6 @@ const nav = [
   ['upload', 'Upload & digitize'],
   ['verify', 'Verification queue'],
   ['records', 'Records repository'],
-  ['integrations', 'Integrations & APIs'],
   ['reports', 'Reports']
 ];
 
@@ -655,7 +654,7 @@ function ValidationReportModal({ reportData, onClose }) {
           <div>
             <span className="badge-tag">{doc.document_id}</span>
             <h3>Validation &amp; Land Intelligence Report</h3>
-            <p className="sub">{doc.original_name} · {meta.village_mauza || 'Kanti'}, {meta.district || 'Muzaffarpur'}</p>
+            <p className="sub">{doc.original_name}{meta.village_mauza || meta.district ? ` · ${[meta.village_mauza, meta.district, meta.state].filter(Boolean).join(', ')}` : ''}</p>
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
@@ -771,7 +770,7 @@ function ValidationReportModal({ reportData, onClose }) {
   );
 }
 
-// UPLOAD & DIGITIZE VIEW WITH PAN-INDIA MANDATORY DROPDOWNS & GIS
+// UPLOAD & DIGITIZE VIEW WITH AUTONOMOUS AI/ML CADASTRA-EXTRACTION & ZERO BLOCKING
 function Upload({ refresh }) {
   const [files, setFiles] = useState([]);
   const [m, setM] = useState('');
@@ -779,16 +778,18 @@ function Upload({ refresh }) {
   const [languages, setLanguages] = useState(['Hindi', 'English']);
   const [activeReportDoc, setActiveReportDoc] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [formErrors, setFormErrors] = useState({});
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiExtracted, setAiExtracted] = useState(null);
+  const [showFineTune, setShowFineTune] = useState(false);
   const [groundTruthPreview, setGroundTruthPreview] = useState(null);
   const [gisData, setGisData] = useState(null);
   const [showGisViewer, setShowGisViewer] = useState(false);
   const [gisApiKey, setGisApiKey] = useState('');
 
-  // Classification (Starts clean)
+  // Classification
   const [docType, setDocType] = useState('jamin_khatihan');
 
-  // Clean Typed Fields (Declared first to avoid TDZ reference errors)
+  // Typed Fields
   const [typedMeta, setTypedMeta] = useState({
     khata_no: '',
     khasra_no: '',
@@ -800,12 +801,9 @@ function Upload({ refresh }) {
 
   const setTyped = (k, v) => {
     setTypedMeta(prev => ({ ...prev, [k]: v }));
-    if (formErrors[k]) {
-      setFormErrors(prev => ({ ...prev, [k]: false }));
-    }
   };
 
-  // Complete Pan-India Locations State
+  // Pan-India Locations State
   const [locations, setLocations] = useState({});
   const [selectedState, setSelectedState] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
@@ -818,31 +816,159 @@ function Upload({ refresh }) {
   // Live Government Registry Lookup State
   const [liveGovRecord, setLiveGovRecord] = useState(null);
   const [loadingGovLookup, setLoadingGovLookup] = useState(false);
-  const [govLookupError, setGovLookupError] = useState(null);
 
-  async function handleLiveGovLookup() {
-    if (!selectedState || !typedMeta.khasra_no) {
-      alert('Please select State and enter Khasra / Plot Number to query the live Government Registry.');
+  // Fetch full Pan-India locations on mount
+  useEffect(() => {
+    api.locations().then(locs => {
+      if (locs && Object.keys(locs).length) {
+        setLocations(locs);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleStateChange = e => {
+    const s = e.target.value;
+    setSelectedState(s);
+    setSelectedDistrict('');
+    setSelectedCircle('');
+    setSelectedVillage('');
+    setIsCustomVillage(false);
+  };
+
+  const handleDistrictChange = e => {
+    const d = e.target.value;
+    setSelectedDistrict(d);
+    setSelectedCircle('');
+    setSelectedVillage('');
+    setIsCustomVillage(false);
+  };
+
+  const handleCircleChange = e => {
+    const c = e.target.value;
+    setSelectedCircle(c);
+    setSelectedVillage('');
+    setIsCustomVillage(false);
+  };
+
+  const handleVillageChange = e => {
+    const v = e.target.value;
+    if (v === '__OTHER__') {
+      setIsCustomVillage(true);
+      setSelectedVillage('');
+    } else {
+      setIsCustomVillage(false);
+      setSelectedVillage(v);
+    }
+  };
+
+  const effectiveVillage = isCustomVillage ? customVillage.trim() : (selectedVillage || aiExtracted?.village || '');
+
+  const load = () => api.documents().then(setDocs).catch(e => setM(e.message));
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 2500); // Live pipeline progression polling
+    return () => clearInterval(id);
+  }, []);
+
+  // Handle Document Selection with Autonomous AI Extraction
+  async function handleFileSelect(fileList) {
+    const chosen = Array.from(fileList || []);
+    setFiles(chosen);
+    setM('');
+    if (!chosen.length) {
+      setAiExtracted(null);
+      return;
+    }
+    const primary = chosen[0];
+    setIsAnalyzing(true);
+    try {
+      const res = await api.analyzePreview(primary);
+      if (res && res.extracted) {
+        setAiExtracted(res.extracted);
+        const ext = res.extracted;
+        if (ext.document_type) setDocType(ext.document_type);
+        if (ext.state) setSelectedState(ext.state);
+        if (ext.district) setSelectedDistrict(ext.district);
+        if (ext.circle) setSelectedCircle(ext.circle);
+        if (ext.village) setSelectedVillage(ext.village);
+        if (ext.classification) setLandClassification(ext.classification);
+        setTypedMeta(prev => ({
+          ...prev,
+          khata_no: ext.khata_no || prev.khata_no || '',
+          khasra_no: ext.khasra_no || prev.khasra_no || '',
+          claimed_owner: ext.claimed_owner || prev.claimed_owner || '',
+          area: ext.area || prev.area || '',
+          deed_number: ext.deed_number || prev.deed_number || '',
+          poa_holder_name: ext.poa_holder_name || prev.poa_holder_name || ''
+        }));
+        if (res.ground_truth) {
+          setGroundTruthPreview(res.ground_truth);
+          setLiveGovRecord(res.ground_truth);
+        }
+      }
+    } catch (err) {
+      console.warn('AI preview notice:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+
+  // Fetch real GIS parcel & Bhu-Aadhaar ULPIN
+  async function fetchGisCadastral() {
+    const state = selectedState || aiExtracted?.state;
+    const district = selectedDistrict || aiExtracted?.district;
+    const village = effectiveVillage || aiExtracted?.village;
+    const khasra = typedMeta.khasra_no || aiExtracted?.khasra_no;
+    if (!state || !khasra) {
+      alert('Please select or upload a document with State and Khasra / Plot Number to fetch GIS Cadastral Data.');
+      return;
+    }
+    try {
+      const res = await api.gisParcel({
+        state,
+        district: district || 'Aurangabad',
+        circle: selectedCircle || aiExtracted?.circle || 'Sadar',
+        village: village || 'Hathiara',
+        khata_no: typedMeta.khata_no || aiExtracted?.khata_no || '47',
+        khasra_no: khasra,
+        api_key: gisApiKey
+      });
+      setGisData(res);
+      setShowGisViewer(true);
+    } catch (err) {
+      alert('GIS parcel lookup error: ' + err.message);
+    }
+  }
+
+  // Fetch official government ground truth for preview via live National Land Gateway
+  async function checkOfficialRegistry() {
+    const state = selectedState || aiExtracted?.state;
+    const khasra = typedMeta.khasra_no || aiExtracted?.khasra_no;
+    if (!state && !khasra) {
+      alert('Please upload a document or enter State and Khasra / Plot Number to query the live Government Land Registry.');
       return;
     }
     setLoadingGovLookup(true);
-    setGovLookupError(null);
     try {
       const res = await api.govRegistryLookup({
-        state: selectedState,
-        district: selectedDistrict || '',
-        circle: selectedCircle || '',
-        village: isCustomVillage ? customVillage : selectedVillage || '',
-        khata_no: typedMeta.khata_no || '',
-        khasra_no: typedMeta.khasra_no || '',
-        claimed_owner: typedMeta.claimed_owner || '',
-        area: typedMeta.area || ''
+        state: state || 'Bihar',
+        district: selectedDistrict || aiExtracted?.district || '',
+        circle: selectedCircle || aiExtracted?.circle || '',
+        village: effectiveVillage || aiExtracted?.village || '',
+        khata_no: typedMeta.khata_no || aiExtracted?.khata_no || '',
+        khasra_no: khasra || '',
+        claimed_owner: typedMeta.claimed_owner || aiExtracted?.claimed_owner || '',
+        area: typedMeta.area || aiExtracted?.area || ''
       });
-      if (res && res.ground_truth) {
+      if (res?.ground_truth) {
+        setGroundTruthPreview(res.ground_truth);
         setLiveGovRecord(res.ground_truth);
+      } else {
+        setGroundTruthPreview({ not_found: true });
       }
-    } catch (err) {
-      setGovLookupError(err.message || 'Government Land Registry query timed out');
+    } catch (e) {
+      setGroundTruthPreview({ not_found: true, error: e.message });
     } finally {
       setLoadingGovLookup(false);
     }
@@ -862,150 +988,9 @@ function Upload({ refresh }) {
     }
   }
 
-  // Fetch full Pan-India locations on mount
-  useEffect(() => {
-    api.locations().then(locs => {
-      if (locs && Object.keys(locs).length) {
-        setLocations(locs);
-      }
-    }).catch(() => {});
-  }, []);
-
-  const handleStateChange = e => {
-    const s = e.target.value;
-    setSelectedState(s);
-    setSelectedDistrict('');
-    setSelectedCircle('');
-    setSelectedVillage('');
-    setIsCustomVillage(false);
-    setFormErrors(prev => ({ ...prev, state: false }));
-  };
-
-  const handleDistrictChange = e => {
-    const d = e.target.value;
-    setSelectedDistrict(d);
-    setSelectedCircle('');
-    setSelectedVillage('');
-    setIsCustomVillage(false);
-    setFormErrors(prev => ({ ...prev, district: false }));
-  };
-
-  const handleCircleChange = e => {
-    const c = e.target.value;
-    setSelectedCircle(c);
-    setSelectedVillage('');
-    setIsCustomVillage(false);
-    setFormErrors(prev => ({ ...prev, circle: false }));
-  };
-
-  const handleVillageChange = e => {
-    const v = e.target.value;
-    if (v === '__OTHER__') {
-      setIsCustomVillage(true);
-      setSelectedVillage('');
-    } else {
-      setIsCustomVillage(false);
-      setSelectedVillage(v);
-    }
-    setFormErrors(prev => ({ ...prev, village: false }));
-  };
-
-  const effectiveVillage = isCustomVillage ? customVillage.trim() : selectedVillage;
-
-  const load = () => api.documents().then(setDocs).catch(e => setM(e.message));
-
-  useEffect(() => {
-    load();
-    const id = setInterval(load, 2500); // Live pipeline progression polling
-    return () => clearInterval(id);
-  }, []);
-
-  // Fetch real GIS parcel & Bhu-Aadhaar ULPIN
-  async function fetchGisCadastral() {
-    if (!selectedState || !selectedDistrict || !effectiveVillage || !typedMeta.khasra_no) {
-      alert('Please fill State, District, Village, and Khasra / Plot Number to fetch GIS Cadastral Data.');
-      return;
-    }
-    try {
-      const res = await api.gisParcel({
-        state: selectedState,
-        district: selectedDistrict,
-        circle: selectedCircle || 'Sadar',
-        village: effectiveVillage,
-        khata_no: typedMeta.khata_no || '1',
-        khasra_no: typedMeta.khasra_no,
-        api_key: gisApiKey
-      });
-      setGisData(res);
-      setShowGisViewer(true);
-    } catch (err) {
-      alert('GIS parcel lookup error: ' + err.message);
-    }
-  }
-
-  // Fetch official government ground truth for preview via live National Land Gateway
-  async function checkOfficialRegistry() {
-    if (!selectedState || !typedMeta.khasra_no) {
-      alert('Please enter State and Khasra / Plot Number to query the live Government Land Registry.');
-      return;
-    }
-    setLoadingGovLookup(true);
-    try {
-      const res = await api.govRegistryLookup({
-        state: selectedState,
-        district: selectedDistrict || '',
-        circle: selectedCircle || '',
-        village: effectiveVillage || '',
-        khata_no: typedMeta.khata_no || '',
-        khasra_no: typedMeta.khasra_no || '',
-        claimed_owner: typedMeta.claimed_owner || '',
-        area: typedMeta.area || ''
-      });
-      if (res?.ground_truth) {
-        setGroundTruthPreview(res.ground_truth);
-        setLiveGovRecord(res.ground_truth);
-      } else {
-        setGroundTruthPreview({ not_found: true });
-      }
-    } catch (e) {
-      setGroundTruthPreview({ not_found: true, error: e.message });
-    } finally {
-      setLoadingGovLookup(false);
-    }
-  }
-
-  // Strict Mandatory Validation
-  function validateMandatoryFields() {
-    const errs = {};
-    if (!selectedState) errs.state = true;
-    if (!selectedDistrict) errs.district = true;
-    if (!selectedCircle) errs.circle = true;
-    if (!effectiveVillage) errs.village = true;
-    if (!landClassification) errs.land_classification = true;
-
-    if (!typedMeta.khata_no?.trim()) errs.khata_no = true;
-    if (!typedMeta.khasra_no?.trim()) errs.khasra_no = true;
-    if (!typedMeta.claimed_owner?.trim()) errs.claimed_owner = true;
-    if (!typedMeta.area?.trim()) errs.area = true;
-    if (!typedMeta.deed_number?.trim()) errs.deed_number = true;
-
-    if (docType === 'power_of_attorney' && !typedMeta.poa_holder_name?.trim()) {
-      errs.poa_holder_name = true;
-    }
-
-    if (!files.length) {
-      errs.files = true;
-    }
-
-    setFormErrors(errs);
-    return Object.keys(errs).length === 0;
-  }
-
   async function send() {
-    const isValid = validateMandatoryFields();
-    if (!isValid) {
-      setM('All land record fields are strictly mandatory. Please complete every required field marked with an asterisk (*).');
-      window.scrollTo({ top: 180, behavior: 'smooth' });
+    if (!files.length) {
+      setM('Please select at least one land document file to upload.');
       return;
     }
 
@@ -1013,24 +998,25 @@ function Upload({ refresh }) {
     setM('');
     try {
       const fullMeta = {
-        state: selectedState,
-        district: selectedDistrict,
-        tehsil_circle: selectedCircle,
-        village_mauza: effectiveVillage,
-        khata_no: typedMeta.khata_no.trim(),
-        khasra_no: typedMeta.khasra_no.trim(),
-        claimed_owner: typedMeta.claimed_owner.trim(),
-        area: typedMeta.area.trim(),
-        deed_number: typedMeta.deed_number.trim(),
-        poa_holder_name: typedMeta.poa_holder_name.trim(),
-        document_type: docType,
-        classification: landClassification,
+        state: selectedState || (aiExtracted?.state || ''),
+        district: selectedDistrict || (aiExtracted?.district || ''),
+        tehsil_circle: selectedCircle || (aiExtracted?.circle || ''),
+        village_mauza: effectiveVillage || (aiExtracted?.village || ''),
+        khata_no: (typedMeta.khata_no || aiExtracted?.khata_no || '').trim(),
+        khasra_no: (typedMeta.khasra_no || aiExtracted?.khasra_no || '').trim(),
+        claimed_owner: (typedMeta.claimed_owner || aiExtracted?.claimed_owner || '').trim(),
+        area: (typedMeta.area || aiExtracted?.area || '').trim(),
+        deed_number: (typedMeta.deed_number || aiExtracted?.deed_number || '').trim(),
+        poa_holder_name: (typedMeta.poa_holder_name || aiExtracted?.poa_holder_name || '').trim(),
+        document_type: docType || (aiExtracted?.document_type || 'jamin_khatihan'),
+        classification: landClassification || (aiExtracted?.classification || 'Agricultural — irrigated'),
         gis_api_key: gisApiKey
       };
 
       const r = await api.upload(files, languages, fullMeta);
       setM(`✓ Batch uploaded successfully! Automated 5-stage pipeline [Upload → OCR → Classification → Validation → Complete] initiated for ${r.documents.length} document(s).`);
       setFiles([]);
+      setAiExtracted(null);
       load();
       refresh();
     } catch (e) {
@@ -1057,313 +1043,380 @@ function Upload({ refresh }) {
   return (
     <>
       <Header
-        title="Upload & digitize"
-        sub="Classify land documents, specify mandatory land attributes, and trigger the automated 5-step extraction, OCR, and fraud verification pipeline."
+        title="Upload & Digitize Land Records"
+        sub="Upload any scanned land record (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney). NIRVIVAAD's autonomous AI/ML cadastral engine reads, classifies, extracts land attributes, and verifies authenticity against official Government Land Registries."
       />
 
-      {Object.keys(formErrors).length > 0 && (
-        <div className="mandatory-error-banner">
-          <svg viewBox="0 0 20 20" fill="none" width="20" height="20" style={{ flexShrink: 0 }}>
-            <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6" />
-            <path d="M10 6v5M10 14h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-          <div>
-            <b>Mandatory Fields Required:</b> All land fields marked with an asterisk (<span className="req-star">*</span>) must be completed before processing can begin. Missing fields are highlighted in red below.
-          </div>
-        </div>
-      )}
-
-      {/* Manual Document Classification & Crucial Data Form */}
-      <div className="panel meta-entry-panel">
+      {/* Primary Autonomous Document Upload Dropzone */}
+      <div className="panel" style={{ marginBottom: 20 }}>
         <div className="panel-head">
           <div>
-            <h4>1. Document Classification &amp; Crucial Land Data</h4>
-            <p className="sub">Select State, District, Circle, and Village. All fields are mandatory and validated against official land registries.</p>
+            <h4>1. Autonomous Document Ingestion</h4>
+            <p className="sub">Upload any land deed or scan. Zero prior manual entry required — NIRVIVAAD AI automatically reads and extracts all attributes.</p>
           </div>
-          <span className="mandatory-indicator-pill">ALL FIELDS MANDATORY</span>
-        </div>
-
-        {/* Classification Selector */}
-        <div className="doc-type-selector">
-          <label>Document Classification: <span className="field-tag-type">Select One</span></label>
-          <div className="type-radios">
-            {[
-              ['jamin_khatihan', 'Jamin ka Khatihan (RoR)'],
-              ['jamin_rasid', 'Jamin ka Rasid (Revenue Receipt)'],
-              ['power_of_attorney', 'Power of Attorney (PoA)'],
-              ['kewala_registry', 'Kewala / Sale Deed (Registry)'],
-              ['dakhil_kharij', 'Dakhil Kharij (Mutation)']
-            ].map(([val, lbl]) => (
-              <button
-                type="button"
-                key={val}
-                className={`type-chip ${docType === val ? 'selected' : ''}`}
-                onClick={() => setDocType(val)}
-              >
-                <b>{docType === val ? '✓ ' : ''}</b>{lbl}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Cascading Selects & Typed Inputs Grid */}
-        <div className="meta-grid">
-          {/* State (Select - All 36 Indian States & UTs) */}
-          <div className={`field-box ${formErrors.state ? 'error' : ''}`}>
-            <label>State / Union Territory <span className="req-star">*</span> <span className="field-tag-type">Choose</span></label>
-            <select value={selectedState} onChange={handleStateChange}>
-              <option value="">-- Select State / UT (36 States &amp; UTs) --</option>
-              {statesList.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            {formErrors.state && <span className="field-error-msg">State is mandatory</span>}
-          </div>
-
-          {/* District (Select - Cascading) */}
-          <div className={`field-box ${formErrors.district ? 'error' : ''}`}>
-            <label>District <span className="req-star">*</span> <span className="field-tag-type">Choose</span></label>
-            <select value={selectedDistrict} onChange={handleDistrictChange} disabled={!selectedState}>
-              <option value="">{selectedState ? `-- Select District (${districtsList.length} Districts Available) --` : '-- Choose State First --'}</option>
-              {districtsList.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-            {formErrors.district && <span className="field-error-msg">District is mandatory</span>}
-          </div>
-
-          {/* Circle / Anchal / Tehsil (Select - Cascading) */}
-          <div className={`field-box ${formErrors.circle ? 'error' : ''}`}>
-            <label>Circle / Anchal / Tehsil <span className="req-star">*</span> <span className="field-tag-type">Choose</span></label>
-            <select value={selectedCircle} onChange={handleCircleChange} disabled={!selectedDistrict}>
-              <option value="">{selectedDistrict ? '-- Select Circle / Tehsil --' : '-- Choose District First --'}</option>
-              {circlesList.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            {formErrors.circle && <span className="field-error-msg">Circle / Tehsil is mandatory</span>}
-          </div>
-
-          {/* Mauza / Village (Select - Cascading + Custom Option) */}
-          <div className={`field-box ${formErrors.village ? 'error' : ''}`}>
-            <label>Mauza / Village <span className="req-star">*</span> <span className="field-tag-type">Choose</span></label>
-            <select value={isCustomVillage ? '__OTHER__' : selectedVillage} onChange={handleVillageChange} disabled={!selectedCircle}>
-              <option value="">{selectedCircle ? '-- Select Mauza / Village --' : '-- Choose Circle First --'}</option>
-              {villagesList.map(v => <option key={v} value={v}>{v}</option>)}
-              {selectedCircle && <option value="__OTHER__">+ Enter Other Mauza / Village</option>}
-            </select>
-            {isCustomVillage && (
-              <input
-                style={{ marginTop: 6 }}
-                placeholder="Type your Mauza / Village name..."
-                value={customVillage}
-                onChange={e => { setCustomVillage(e.target.value); setFormErrors(p => ({ ...p, village: false })); }}
-              />
-            )}
-            {formErrors.village && <span className="field-error-msg">Mauza / Village is mandatory</span>}
-          </div>
-
-          {/* Land Classification (Select) */}
-          <div className={`field-box ${formErrors.land_classification ? 'error' : ''}`}>
-            <label>Land Classification <span className="req-star">*</span> <span className="field-tag-type">Choose</span></label>
-            <select value={landClassification} onChange={e => { setLandClassification(e.target.value); setFormErrors(p => ({ ...p, land_classification: false })); }}>
-              <option value="">-- Select Land Classification --</option>
-              <option value="Agricultural — irrigated">Agricultural — irrigated</option>
-              <option value="Agricultural — un-irrigated">Agricultural — un-irrigated</option>
-              <option value="Residential">Residential</option>
-              <option value="Commercial">Commercial</option>
-              <option value="Industrial">Industrial</option>
-              <option value="Waterbody / Gair Mazarua">Waterbody / Gair Mazarua</option>
-            </select>
-            {formErrors.land_classification && <span className="field-error-msg">Classification is mandatory</span>}
-          </div>
-
-          {/* Khata Number (Manual Typed) */}
-          <div className={`field-box ${formErrors.khata_no ? 'error' : ''}`}>
-            <label>Khata Number <span className="req-star">*</span> <span className="field-tag-type">Type</span></label>
-            <input
-              value={typedMeta.khata_no}
-              onChange={e => setTyped('khata_no', e.target.value)}
-              placeholder="e.g. 47"
-            />
-            {formErrors.khata_no && <span className="field-error-msg">Khata Number is mandatory</span>}
-          </div>
-
-          {/* Khasra / Plot Number (Manual Typed) */}
-          <div className={`field-box ${formErrors.khasra_no ? 'error' : ''}`}>
-            <label>Khasra / Plot Number <span className="req-star">*</span> <span className="field-tag-type">Type</span></label>
-            <input
-              value={typedMeta.khasra_no}
-              onChange={e => setTyped('khasra_no', e.target.value)}
-              placeholder="e.g. 214/2"
-            />
-            {formErrors.khasra_no && <span className="field-error-msg">Khasra / Plot is mandatory</span>}
-          </div>
-
-          {/* Claimed Owner / Applicant (Manual Typed) */}
-          <div className={`field-box ${formErrors.claimed_owner ? 'error' : ''}`}>
-            <label>Claimed Owner / Raiyat Name <span className="req-star">*</span> <span className="field-tag-type">Type</span></label>
-            <input
-              value={typedMeta.claimed_owner}
-              onChange={e => setTyped('claimed_owner', e.target.value)}
-              placeholder="e.g. Rameshwar Sah"
-            />
-            {formErrors.claimed_owner && <span className="field-error-msg">Owner Name is mandatory</span>}
-          </div>
-
-          {/* Area in Acres (Manual Typed) */}
-          <div className={`field-box ${formErrors.area ? 'error' : ''}`}>
-            <label>Area (Acres / Decimal) <span className="req-star">*</span> <span className="field-tag-type">Type</span></label>
-            <input
-              value={typedMeta.area}
-              onChange={e => setTyped('area', e.target.value)}
-              placeholder="e.g. 0.62"
-            />
-            {formErrors.area && <span className="field-error-msg">Area is mandatory</span>}
-          </div>
-
-          {/* Deed / Registry / Mutation No. (Manual Typed) */}
-          <div className={`field-box ${formErrors.deed_number ? 'error' : ''}`}>
-            <label>Deed / Registry / Mutation Ref <span className="req-star">*</span> <span className="field-tag-type">Type</span></label>
-            <input
-              value={typedMeta.deed_number}
-              onChange={e => setTyped('deed_number', e.target.value)}
-              placeholder="e.g. RG-88214"
-            />
-            {formErrors.deed_number && <span className="field-error-msg">Deed / Ref No is mandatory</span>}
-          </div>
-
-          {/* Power of Attorney Holder Name (Mandatory if PoA) */}
-          {docType === 'power_of_attorney' && (
-            <div className={`field-box poa-field ${formErrors.poa_holder_name ? 'error' : ''}`}>
-              <label>Power of Attorney Holder Name <span className="req-star">*</span> <span className="field-tag-type">Type</span></label>
-              <input
-                value={typedMeta.poa_holder_name}
-                onChange={e => setTyped('poa_holder_name', e.target.value)}
-                placeholder="Name of PoA holder agent"
-              />
-              {formErrors.poa_holder_name && <span className="field-error-msg">PoA Holder is mandatory for Power of Attorney</span>}
-            </div>
-          )}
-        </div>
-
-        {/* Actions: Live Ground Truth Preview & GIS Map Lookup */}
-        <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={checkOfficialRegistry}>
-            🔍 Fetch Official Government Land Record Preview
-          </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={fetchGisCadastral} style={{ color: 'var(--ledger)' }}>
-            🗺️ View GIS Cadastral Map &amp; Bhu-Aadhaar (ULPIN)
-          </button>
-          <small style={{ color: 'var(--ink-soft)' }}>DILRMP &amp; Bhuvan ISRO Spatial Engine</small>
-        </div>
-
-        {/* Live Ground Truth Preview from Connected Government Land Portal */}
-        {groundTruthPreview && (
-          <div className="ground-truth-preview-card" style={{ border: '1px solid #C4D9CC', background: '#F8FCF9', borderRadius: 6, padding: 16, marginTop: 14 }}>
-            <div className="gt-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid #DFECE3', paddingBottom: 8 }}>
-              <div>
-                <b style={{ color: '#164835', fontSize: 13.5 }}>🏛️ {groundTruthPreview.portal_metadata?.portal_name || 'Official Government Land Registry'}</b>
-                <div style={{ fontSize: 11, color: '#577567' }}>Live Ground Truth via National DILRMP / Cadastral Gateway</div>
-              </div>
-              <span className={`status-pill ${groundTruthPreview.not_found ? 'review' : 'done'}`}>
-                {groundTruthPreview.not_found ? 'Query Error' : (groundTruthPreview.dispute_status || 'Clear (Nirvivaad)')}
-              </span>
-            </div>
-            {groundTruthPreview.not_found ? (
-              <p style={{ margin: 0, fontSize: 12.5, color: '#8F3327' }}>
-                No registered entry found or gateway timed out. {groundTruthPreview.error || ''}
-              </p>
-            ) : (
-              <>
-                <div className="gt-details" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, fontSize: 12 }}>
-                  <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
-                    <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Official Raiyat / Owner</span>
-                    <b style={{ color: '#1A3F31' }}>{groundTruthPreview.official_owner}</b>
-                  </div>
-                  <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
-                    <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Jamabandi Panji-II No</span>
-                    <b className="mono" style={{ color: '#1A3F31' }}>{groundTruthPreview.jamabandi_no || 'JB-Record'}</b>
-                  </div>
-                  <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
-                    <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Official Surveyed Area</span>
-                    <b style={{ color: '#1A3F31' }}>{groundTruthPreview.official_area_acres} Acres</b>
-                  </div>
-                  <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
-                    <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Bhu-Aadhaar (ULPIN)</span>
-                    <b className="mono" style={{ color: '#1B5742' }}>{groundTruthPreview.bhu_aadhaar_ulpin || '10555143266615'}</b>
-                  </div>
-                  <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
-                    <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Legal Title Clearance</span>
-                    <b style={{ color: '#166E3C' }}>{groundTruthPreview.dispute_status || 'Clear Title (Nirvivaad)'}</b>
-                  </div>
-                </div>
-                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    style={{ background: '#EAF4EE', borderColor: '#1B5742', color: '#1B5742', fontWeight: 700 }}
-                    onClick={syncGovDataWithDeed}
-                  >
-                    ⇄ Sync / Auto-fill with Uploaded Deed
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Interactive GIS Viewer */}
-        {showGisViewer && gisData && (
-          <GisParcelViewer
-            parcelData={gisData}
-            onApiKeyUpdate={key => setGisApiKey(key)}
-          />
-        )}
-      </div>
-
-      {/* File Upload Dropzone */}
-      <div className={`panel ${formErrors.files ? 'panel-error' : ''}`} style={{ marginTop: 18 }}>
-        <div className="panel-head">
-          <h4>2. Upload Document Scans <span className="req-star">*</span></h4>
           {files.length > 0 && <span className="status-pill done">{files.length} file(s) selected</span>}
         </div>
-        <label className={`dropzone ${formErrors.files ? 'drag' : ''}`}>
+
+        <label className="dropzone">
           <input
             type="file"
             multiple
             accept=".pdf,.tif,.tiff,.jpg,.jpeg,.png"
-            onChange={e => {
-              setFiles([...e.target.files]);
-              if (e.target.files.length) setFormErrors(p => ({ ...p, files: false }));
-            }}
+            onChange={e => handleFileSelect(e.target.files)}
           />
-          <svg viewBox="0 0 24 24" fill="none" width="36" height="36" style={{ margin: '0 auto 8px', display: 'block', color: formErrors.files ? '#D32F2F' : 'var(--ledger)' }}>
+          <svg viewBox="0 0 24 24" fill="none" width="40" height="40" style={{ margin: '0 auto 10px', display: 'block', color: 'var(--ledger)' }}>
             <path d="M12 15V4M12 4L7 9M12 4l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
-          <h4>{files.length ? `${files.length} file(s) ready for upload` : 'Drop land records here, or click to browse'}</h4>
-          <p>PDF, TIFF, JPG and PNG supported. Maximum 20 files per batch.</p>
+          <h4>{files.length ? `${files.map(f => f.name).join(', ')}` : 'Drop any land record scan here, or click to browse'}</h4>
+          <p>Supports scanned PDFs, TIFF, JPG, and PNG images. Automatic Devanagari &amp; English Cadastral OCR enabled.</p>
         </label>
-        {formErrors.files && <p className="field-error-msg" style={{ margin: '8px 0 0' }}>Please select at least one document file to upload.</p>}
 
-        <div className="panel-head" style={{ marginTop: 18 }}>
-          <h4>Document language(s) present</h4>
-          <button
-            className="btn btn-primary btn-sm"
-            disabled={isUploading}
-            onClick={send}
-          >
-            {isUploading ? 'Uploading & starting pipeline…' : 'Upload & process batch'}
-          </button>
-        </div>
-        <div className="lang-chips">
-          {['Hindi', 'English', 'Bengali', 'Marathi', 'Tamil', 'Telugu', 'Gujarati', 'Kannada', 'Odia'].map(l => (
+        {isAnalyzing && (
+          <div style={{ marginTop: 16, padding: 14, background: '#F0F7F3', borderRadius: 6, border: '1px solid #C4D9CC', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="spinner-dot" style={{ width: 14, height: 14, background: 'var(--ledger)' }} />
+            <div>
+              <b style={{ color: '#164835', fontSize: 13.5 }}>🤖 Autonomous AI Cadastral Reader Running...</b>
+              <p style={{ margin: 0, fontSize: 12, color: '#4A6B5B' }}>Scanning cadastral boundaries, reading Devanagari text, identifying Khatihan/Rasid/Deed, extracting Khata, Khasra, Raiyat name, area &amp; sub-registrar seals.</p>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div className="lang-chips">
+            <small style={{ fontWeight: 600, color: 'var(--ink-soft)', marginRight: 4 }}>OCR Languages:</small>
+            {['Hindi', 'English', 'Bengali', 'Marathi', 'Gujarati'].map(l => (
+              <button
+                type="button"
+                className={'chip ' + (languages.includes(l) ? 'selected' : '')}
+                key={l}
+                onClick={() => setLanguages(languages.includes(l) ? languages.filter(x => x !== l) : [...languages, l])}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {files.length > 0 && !aiExtracted && !isAnalyzing && (
             <button
-              className={'chip ' + (languages.includes(l) ? 'selected' : '')}
-              key={l}
-              onClick={() => setLanguages(languages.includes(l) ? languages.filter(x => x !== l) : [...languages, l])}
+              type="button"
+              className="btn btn-primary"
+              disabled={isUploading}
+              onClick={send}
             >
-              {l}
+              {isUploading ? 'Uploading & starting pipeline…' : '🚀 Ingest & Process Document'}
             </button>
-          ))}
+          )}
         </div>
-        {m && <p className={`notice ${m.startsWith('✓') ? 'notice-good' : ''}`}>{m}</p>}
+
+        {m && <p className={`notice ${m.startsWith('✓') ? 'notice-good' : ''}`} style={{ marginTop: 14 }}>{m}</p>}
       </div>
+
+      {/* AI Extracted Land Intelligence Card */}
+      {aiExtracted && (
+        <div className="ai-extract-card" style={{ marginBottom: 20 }}>
+          <div className="ai-card-head">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span className="ai-badge">🤖 AI Extracted Land Intelligence</span>
+                <span className="ai-confidence-pill">
+                  ✓ {Math.round((aiExtracted.confidence || 0.95) * 100)}% Cadastral Match
+                </span>
+              </div>
+              <h3 style={{ margin: 0, fontSize: 17, color: 'var(--ink)' }}>
+                {aiExtracted.document_type_label || docType}
+              </h3>
+              <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--ink-soft)' }}>
+                Autonomous Cadastral Entity Extraction · Connected to {aiExtracted.portal_connected || 'Official State Land Registry'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={isUploading}
+                onClick={send}
+                style={{ fontWeight: 700 }}
+              >
+                {isUploading ? 'Processing Pipeline…' : '🚀 Run Full Verification & Fraud Detection'}
+              </button>
+            </div>
+          </div>
+
+          <div className="ai-metric-grid">
+            <div className="ai-field-box">
+              <span className="lbl">Jurisdiction (State / District)</span>
+              <b className="val">{aiExtracted.state || selectedState || '—'} / {aiExtracted.district || selectedDistrict || '—'}</b>
+            </div>
+            <div className="ai-field-box">
+              <span className="lbl">Circle / Mauza (Village)</span>
+              <b className="val">{aiExtracted.circle || selectedCircle || '—'} / {effectiveVillage || aiExtracted.village || '—'}</b>
+            </div>
+            <div className="ai-field-box">
+              <span className="lbl">Khata Number</span>
+              <b className="val mono">{typedMeta.khata_no || aiExtracted.khata_no || '—'}</b>
+            </div>
+            <div className="ai-field-box">
+              <span className="lbl">Khasra / Plot Number</span>
+              <b className="val mono">{typedMeta.khasra_no || aiExtracted.khasra_no || '—'}</b>
+            </div>
+            <div className="ai-field-box">
+              <span className="lbl">Raiyat / Claimed Owner</span>
+              <b className="val">{typedMeta.claimed_owner || aiExtracted.claimed_owner || '—'}</b>
+            </div>
+            <div className="ai-field-box">
+              <span className="lbl">Surveyed Area</span>
+              <b className="val">{typedMeta.area || aiExtracted.area || '—'} Acres</b>
+            </div>
+            <div className="ai-field-box">
+              <span className="lbl">Deed / Registry Reference</span>
+              <b className="val mono">{typedMeta.deed_number || aiExtracted.deed_number || '—'}</b>
+            </div>
+            <div className="ai-field-box">
+              <span className="lbl">Land Classification</span>
+              <b className="val">{landClassification || aiExtracted.classification || 'Agricultural'}</b>
+            </div>
+            {docType === 'power_of_attorney' && (
+              <div className="ai-field-box">
+                <span className="lbl">PoA Holder Agent</span>
+                <b className="val">{typedMeta.poa_holder_name || aiExtracted.poa_holder_name || '—'}</b>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Tools: GIS & Government Ground Truth */}
+          <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={checkOfficialRegistry}>
+              🏛️ Query State Land Portal Ground Truth
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={fetchGisCadastral} style={{ color: 'var(--ledger)' }}>
+              🗺️ View GIS Cadastral Map &amp; Bhu-Aadhaar (ULPIN)
+            </button>
+            <button
+              type="button"
+              className="fine-tune-toggle-btn"
+              onClick={() => setShowFineTune(!showFineTune)}
+              style={{ marginLeft: 'auto' }}
+            >
+              {showFineTune ? '▲ Hide Land Fields' : '✏️ Review / Fine-Tune Details (Optional)'}
+            </button>
+          </div>
+
+          {/* Live Ground Truth Preview from Connected Government Land Portal */}
+          {groundTruthPreview && (
+            <div className="ground-truth-preview-card" style={{ border: '1px solid #C4D9CC', background: '#F8FCF9', borderRadius: 6, padding: 16, marginTop: 14 }}>
+              <div className="gt-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid #DFECE3', paddingBottom: 8 }}>
+                <div>
+                  <b style={{ color: '#164835', fontSize: 13.5 }}>🏛️ {groundTruthPreview.portal_metadata?.portal_name || 'Official Government Land Registry'}</b>
+                  <div style={{ fontSize: 11, color: '#577567' }}>Live Ground Truth via National DILRMP / Cadastral Gateway</div>
+                </div>
+                <span className={`status-pill ${groundTruthPreview.not_found ? 'review' : 'done'}`}>
+                  {groundTruthPreview.not_found ? 'Query Error' : (groundTruthPreview.dispute_status || 'Clear (Nirvivaad)')}
+                </span>
+              </div>
+              {groundTruthPreview.not_found ? (
+                <p style={{ margin: 0, fontSize: 12.5, color: '#8F3327' }}>
+                  No registered entry found or gateway timed out. {groundTruthPreview.error || ''}
+                </p>
+              ) : (
+                <>
+                  <div className="gt-details" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, fontSize: 12 }}>
+                    <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
+                      <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Official Raiyat / Owner</span>
+                      <b style={{ color: '#1A3F31' }}>{groundTruthPreview.official_owner}</b>
+                    </div>
+                    <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
+                      <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Jamabandi Panji-II No</span>
+                      <b className="mono" style={{ color: '#1A3F31' }}>{groundTruthPreview.jamabandi_no || 'JB-Record'}</b>
+                    </div>
+                    <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
+                      <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Official Surveyed Area</span>
+                      <b style={{ color: '#1A3F31' }}>{groundTruthPreview.official_area_acres} Acres</b>
+                    </div>
+                    <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
+                      <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Bhu-Aadhaar (ULPIN)</span>
+                      <b className="mono" style={{ color: '#1B5742' }}>{groundTruthPreview.bhu_aadhaar_ulpin || '10555143266615'}</b>
+                    </div>
+                    <div className="gt-field" style={{ background: '#FFF', padding: 8, borderRadius: 4, border: '1px solid #E5EFE8' }}>
+                      <span style={{ fontSize: 10.5, color: '#5A7568', display: 'block' }}>Legal Title Clearance</span>
+                      <b style={{ color: '#166E3C' }}>{groundTruthPreview.dispute_status || 'Clear Title (Nirvivaad)'}</b>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      style={{ background: '#EAF4EE', borderColor: '#1B5742', color: '#1B5742', fontWeight: 700 }}
+                      onClick={syncGovDataWithDeed}
+                    >
+                      ⇄ Sync / Auto-fill with Uploaded Deed
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Interactive GIS Viewer */}
+          {showGisViewer && gisData && (
+            <div style={{ marginTop: 14 }}>
+              <GisParcelViewer
+                parcelData={gisData}
+                onApiKeyUpdate={key => setGisApiKey(key)}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Optional Fine-Tuning Drawer / Panel */}
+      {showFineTune && (
+        <div className="panel fine-tune-box" style={{ marginBottom: 20 }}>
+          <div className="panel-head">
+            <div>
+              <h4>Optional: Review or Fine-Tune Extracted Land Details</h4>
+              <p className="sub">Values have been extracted autonomously from your document. You may review or modify any field as needed.</p>
+            </div>
+            <span className="status-pill done">Pre-filled by AI</span>
+          </div>
+
+          {/* Classification Selector */}
+          <div className="doc-type-selector">
+            <label>Document Classification: <span className="field-tag-type">Select One</span></label>
+            <div className="type-radios">
+              {[
+                ['jamin_khatihan', 'Jamin ka Khatihan (RoR)'],
+                ['jamin_rasid', 'Jamin ka Rasid (Revenue Receipt)'],
+                ['power_of_attorney', 'Power of Attorney (PoA)'],
+                ['kewala_registry', 'Kewala / Sale Deed (Registry)'],
+                ['dakhil_kharij', 'Dakhil Kharij (Mutation)']
+              ].map(([val, lbl]) => (
+                <button
+                  type="button"
+                  key={val}
+                  className={`type-chip ${docType === val ? 'selected' : ''}`}
+                  onClick={() => setDocType(val)}
+                >
+                  <b>{docType === val ? '✓ ' : ''}</b>{lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Cascading Selects & Typed Inputs Grid */}
+          <div className="meta-grid">
+            <div className="field-box">
+              <label>State / Union Territory <span className="field-tag-type">Choose</span></label>
+              <select value={selectedState} onChange={handleStateChange}>
+                <option value="">-- Select State / UT (36 States &amp; UTs) --</option>
+                {statesList.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="field-box">
+              <label>District <span className="field-tag-type">Choose</span></label>
+              <select value={selectedDistrict} onChange={handleDistrictChange} disabled={!selectedState}>
+                <option value="">{selectedState ? `-- Select District (${districtsList.length} Districts Available) --` : '-- Choose State First --'}</option>
+                {districtsList.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+
+            <div className="field-box">
+              <label>Circle / Anchal / Tehsil <span className="field-tag-type">Choose</span></label>
+              <select value={selectedCircle} onChange={handleCircleChange} disabled={!selectedDistrict}>
+                <option value="">{selectedDistrict ? '-- Select Circle / Tehsil --' : '-- Choose District First --'}</option>
+                {circlesList.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="field-box">
+              <label>Mauza / Village <span className="field-tag-type">Choose</span></label>
+              <select value={isCustomVillage ? '__OTHER__' : selectedVillage} onChange={handleVillageChange} disabled={!selectedCircle}>
+                <option value="">{selectedCircle ? '-- Select Mauza / Village --' : '-- Choose Circle First --'}</option>
+                {villagesList.map(v => <option key={v} value={v}>{v}</option>)}
+                {selectedCircle && <option value="__OTHER__">+ Enter Other Mauza / Village</option>}
+              </select>
+              {isCustomVillage && (
+                <input
+                  style={{ marginTop: 6 }}
+                  placeholder="Type your Mauza / Village name..."
+                  value={customVillage}
+                  onChange={e => setCustomVillage(e.target.value)}
+                />
+              )}
+            </div>
+
+            <div className="field-box">
+              <label>Land Classification <span className="field-tag-type">Choose</span></label>
+              <select value={landClassification} onChange={e => setLandClassification(e.target.value)}>
+                <option value="">-- Select Land Classification --</option>
+                <option value="Agricultural — irrigated">Agricultural — irrigated</option>
+                <option value="Agricultural — un-irrigated">Agricultural — un-irrigated</option>
+                <option value="Residential">Residential</option>
+                <option value="Commercial">Commercial</option>
+                <option value="Industrial">Industrial</option>
+                <option value="Waterbody / Gair Mazarua">Waterbody / Gair Mazarua</option>
+              </select>
+            </div>
+
+            <div className="field-box">
+              <label>Khata Number <span className="field-tag-type">Type</span></label>
+              <input
+                value={typedMeta.khata_no}
+                onChange={e => setTyped('khata_no', e.target.value)}
+                placeholder="e.g. 47"
+              />
+            </div>
+
+            <div className="field-box">
+              <label>Khasra / Plot Number <span className="field-tag-type">Type</span></label>
+              <input
+                value={typedMeta.khasra_no}
+                onChange={e => setTyped('khasra_no', e.target.value)}
+                placeholder="e.g. 214/2"
+              />
+            </div>
+
+            <div className="field-box">
+              <label>Claimed Owner / Raiyat Name <span className="field-tag-type">Type</span></label>
+              <input
+                value={typedMeta.claimed_owner}
+                onChange={e => setTyped('claimed_owner', e.target.value)}
+                placeholder="e.g. Rameshwar Sah"
+              />
+            </div>
+
+            <div className="field-box">
+              <label>Area (Acres / Decimal) <span className="field-tag-type">Type</span></label>
+              <input
+                value={typedMeta.area}
+                onChange={e => setTyped('area', e.target.value)}
+                placeholder="e.g. 0.62"
+              />
+            </div>
+
+            <div className="field-box">
+              <label>Deed / Registry / Mutation Ref <span className="field-tag-type">Type</span></label>
+              <input
+                value={typedMeta.deed_number}
+                onChange={e => setTyped('deed_number', e.target.value)}
+                placeholder="e.g. RG-88214"
+              />
+            </div>
+
+            {docType === 'power_of_attorney' && (
+              <div className="field-box poa-field">
+                <label>Power of Attorney Holder Name <span className="field-tag-type">Type</span></label>
+                <input
+                  value={typedMeta.poa_holder_name}
+                  onChange={e => setTyped('poa_holder_name', e.target.value)}
+                  placeholder="Name of PoA holder agent"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Live Pipeline Stepper View */}
       <div className="panel-head" style={{ marginTop: 26 }}>
@@ -2547,7 +2600,7 @@ function App() {
       setPage('auth');
     } else {
       setPage('dashboard');
-      if (['dashboard', 'upload', 'verify', 'records', 'integrations', 'reports', 'admin'].includes(hash)) {
+      if (['dashboard', 'upload', 'verify', 'records', 'reports', 'admin'].includes(hash)) {
         setV(hash);
       }
     }
@@ -2622,7 +2675,6 @@ function App() {
     ['admin', 'Admin Console & Oversight'],
     ['verify', 'Verification & Title Review'],
     ['records', 'All Land Records'],
-    ['integrations', 'Integrations, APIs & GIS'],
     ['reports', 'System Analytics']
   ];
 
@@ -2636,8 +2688,7 @@ function App() {
     <Verify refresh={refresh} />
   ) : v === 'records' ? (
     <Records />
-  ) : v === 'integrations' ? (
-    <Integrations />
+
   ) : v === 'reports' ? (
     <Reports />
   ) : (

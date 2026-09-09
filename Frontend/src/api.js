@@ -61,6 +61,11 @@ export const api = {
     });
     return request('/documents/upload', { method: 'POST', body: f });
   },
+  analyzePreview: file => {
+    const f = new FormData();
+    f.append('file', file);
+    return request('/documents/analyze-preview', { method: 'POST', body: f });
+  },
   locations: () => request('/government/locations'),
   lookup: p => request('/government/lookup?' + new URLSearchParams(p).toString()),
   govRegistryLookup: p => request('/government/registry-lookup?' + new URLSearchParams(p).toString()),

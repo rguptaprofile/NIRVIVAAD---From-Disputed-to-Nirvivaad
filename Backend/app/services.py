@@ -56,10 +56,12 @@ try:
     from .locations_data import ALL_INDIAN_LOCATIONS
     from .gis_service import get_gis_cadastral_parcel, generate_bhu_aadhaar_ulpin
     from .government_registry_service import fetch_official_government_record, STATE_GOV_PORTALS, get_portal_for_state
+    from .document_extractor import extract_cadastral_intelligence
 except (ImportError, ValueError):
     from app.locations_data import ALL_INDIAN_LOCATIONS
     from app.gis_service import get_gis_cadastral_parcel, generate_bhu_aadhaar_ulpin
     from app.government_registry_service import fetch_official_government_record, STATE_GOV_PORTALS, get_portal_for_state
+    from app.document_extractor import extract_cadastral_intelligence
 
 GOVERNMENT_LOCATIONS = ALL_INDIAN_LOCATIONS
 
@@ -383,6 +385,12 @@ def evaluate_with_openai_or_rules(metadata, ground_truth, doc_name):
             'match': 'Valid Format'
         },
         {
+            'field': 'Cadastral Jurisdiction (District & Mauza)',
+            'uploaded': f"{metadata.get('district', '')} · {metadata.get('village_mauza', '')}".strip(' ·'),
+            'registry': f"{ground_truth.get('district', '')} · {ground_truth.get('village_mauza', '')}".strip(' ·'),
+            'match': 'Matched' if metadata.get('district', '').lower() == ground_truth.get('district', '').lower() else 'Mismatch'
+        },
+        {
             'field': 'Recorded Raiyat / Owner',
             'uploaded': claimed_owner or 'Unspecified',
             'registry': official_owner,
@@ -517,15 +525,42 @@ def process_document(db, document_id, actor_id):
         logger.error(f"Document {document_id} was not found")
         return None
 
-    metadata = doc.get('metadata', {})
-    doc_type = metadata.get('document_type', 'jamin_khatihan')
-    state = metadata.get('state') or 'Bihar'
-    district = metadata.get('district') or 'Muzaffarpur'
-    circle = metadata.get('tehsil_circle') or 'Muzaffarpur Sadar'
-    village = metadata.get('village_mauza') or 'Kanti'
-    khata_no = metadata.get('khata_no') or '47'
-    khasra_no = metadata.get('khasra_no') or '214/2'
-    claimed_owner = metadata.get('claimed_owner') or 'Rameshwar Sah'
+    user_hints = doc.get('metadata', {})
+    file_path = doc.get('storage_path', '')
+    original_name = doc.get('original_name', '')
+
+    # Autonomous AI/ML Cadastral Extraction on the uploaded file
+    extracted_intel = extract_cadastral_intelligence(file_path, original_name, user_hints=user_hints)
+
+    doc_type = extracted_intel['document_type']
+    state = extracted_intel['state']
+    district = extracted_intel['district']
+    circle = extracted_intel['tehsil_circle']
+    village = extracted_intel['village_mauza']
+    khata_no = extracted_intel['khata_no']
+    khasra_no = extracted_intel['khasra_no']
+    claimed_owner = extracted_intel['claimed_owner']
+    area = extracted_intel['area']
+    deed_number = extracted_intel['deed_number']
+    poa_holder_name = extracted_intel.get('poa_holder_name', '')
+    land_classification = extracted_intel.get('land_classification', 'Agricultural')
+    ocr_raw_text = extracted_intel['raw_ocr_text']
+    ai_confidence = extracted_intel.get('ai_confidence', 96.5)
+
+    metadata = {
+        'document_type': doc_type,
+        'state': state,
+        'district': district,
+        'tehsil_circle': circle,
+        'village_mauza': village,
+        'khata_no': khata_no,
+        'khasra_no': khasra_no,
+        'claimed_owner': claimed_owner,
+        'area': area,
+        'deed_number': deed_number,
+        'poa_holder_name': poa_holder_name,
+        'land_classification': land_classification
+    }
 
     # Step 1: Uploaded (Completed)
     database.documents.update_one(
@@ -534,10 +569,12 @@ def process_document(db, document_id, actor_id):
             'current_step': 1,
             'status': 'processing',
             'step_name': 'Uploaded',
+            'metadata': metadata,
+            'extracted_intelligence': extracted_intel,
             'updated_at': now()
         }}
     )
-    time.sleep(0.5)
+    time.sleep(0.4)
 
     # Step 2: OCR Extraction
     database.documents.update_one(
@@ -550,25 +587,15 @@ def process_document(db, document_id, actor_id):
         }}
     )
     
-    ocr_raw_text = (
-        f"बिहार सरकार - राजस्व एवं भूमि सुधार विभाग\n"
-        f"खतियान / अधिकार अभिलेख (Record of Rights)\n"
-        f"जिला: {district} | अंचल: {circle} | मौजा: {village}\n"
-        f"खाता संख्या: {khata_no} | खेसरा (प्लॉट) संख्या: {khasra_no}\n"
-        f"रैयत का नाम: {claimed_owner} | पिता का नाम: स्वर्गीय सीताराम साह\n"
-        f"रकबा (क्षेत्रफल): {metadata.get('area', '0.62')} एकड़ (बांसवाड़ी / दोफसली)\n"
-        f"चौहद्दी - उत्तर: रामदेव सिंह, दक्षिण: सरकारी सड़क, पूर्व: श्याम सुंदर, पश्चिम: नहर\n"
-        f"दस्तावेज संख्या: {metadata.get('deed_number', 'REG-88214')}"
-    )
     database.ocr_results.insert_one({
         'document_id': document_id,
         'page': 1,
         'text': ocr_raw_text,
         'language': 'Devanagari / English',
-        'confidence': 0.94,
+        'confidence': ai_confidence / 100.0,
         'created_at': now()
     })
-    time.sleep(0.6)
+    time.sleep(0.5)
 
     # Step 3: Classification
     database.documents.update_one(
@@ -614,13 +641,14 @@ def process_document(db, document_id, actor_id):
         'village': village,
         'district': district,
         'state': state,
-        'area': metadata.get('area') or '0.62',
+        'area': area or '1.00',
         'authenticity_score': eval_report['authenticity_score'],
         'forgery_risk_score': eval_report['forgery_risk_score'],
         'status': final_status,
         'ground_truth': ground_truth,
         'gis_parcel': gis_parcel,
         'ulpin': gis_parcel.get('ulpin'),
+        'extracted_intelligence': extracted_intel,
         'validation_report': eval_report,
         'field_confidences': eval_report.get('field_confidences', {}),
         'audit_trail': [
@@ -666,6 +694,8 @@ def process_document(db, document_id, actor_id):
             'record_id': rid,
             'authenticity_score': eval_report['authenticity_score'],
             'validation_report': eval_report,
+            'extracted_intelligence': extracted_intel,
+            'metadata': metadata,
             'processed_at': now()
         }}
     )

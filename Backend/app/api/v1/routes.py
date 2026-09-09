@@ -14,6 +14,10 @@ from ...services import (
     validate_mandatory_fields, GOVERNMENT_LOCATIONS,
     get_official_registry_ground_truth, record_ai_learning_feedback
 )
+try:
+    from ...document_extractor import extract_cadastral_intelligence
+except (ImportError, ValueError):
+    from app.document_extractor import extract_cadastral_intelligence
 
 router = APIRouter()
 bearer = HTTPBearer(auto_error=False)
@@ -195,9 +199,9 @@ def admin_users(u = Depends(role('admin'))):
 async def upload(
     background: BackgroundTasks,
     files: list[UploadFile] = File(...),
-    document_type: str = Form('jamin_khatihan'),
-    state: str = Form('Bihar'),
-    district: str = Form('Muzaffarpur'),
+    document_type: str = Form(''),
+    state: str = Form(''),
+    district: str = Form(''),
     tehsil_circle: str = Form(''),
     village_mauza: str = Form(''),
     khata_no: str = Form(''),
@@ -206,6 +210,7 @@ async def upload(
     area: str = Form(''),
     deed_number: str = Form(''),
     poa_holder_name: str = Form(''),
+    land_classification: str = Form(''),
     languages: str = Form('Hindi,English'),
     u = Depends(user)
 ):
@@ -214,24 +219,24 @@ async def upload(
     if len(files) > 20:
         raise HTTPException(422, 'Maximum 20 files per batch')
 
-    manual_meta = {
-        'document_type': document_type.strip(),
-        'state': state.strip(),
-        'district': district.strip(),
-        'tehsil_circle': tehsil_circle.strip(),
-        'village_mauza': village_mauza.strip(),
-        'khata_no': khata_no.strip(),
-        'khasra_no': khasra_no.strip(),
-        'claimed_owner': claimed_owner.strip(),
-        'area': area.strip(),
-        'deed_number': deed_number.strip(),
-        'poa_holder_name': poa_holder_name.strip()
-    }
-
-    # Strict Mandatory Field Validation
-    missing_fields = validate_mandatory_fields(manual_meta)
-    if missing_fields:
-        raise HTTPException(422, f"Mandatory fields required: {', '.join(missing_fields)}")
+    # Gather user hints if any are provided (all are completely optional!)
+    user_meta = {}
+    for key, val in [
+        ('document_type', document_type),
+        ('state', state),
+        ('district', district),
+        ('tehsil_circle', tehsil_circle),
+        ('village_mauza', village_mauza),
+        ('khata_no', khata_no),
+        ('khasra_no', khasra_no),
+        ('claimed_owner', claimed_owner),
+        ('area', area),
+        ('deed_number', deed_number),
+        ('poa_holder_name', poa_holder_name),
+        ('land_classification', land_classification)
+    ]:
+        if val and str(val).strip():
+            user_meta[key] = str(val).strip()
 
     allowed = {'.pdf', '.tif', '.tiff', '.jpg', '.jpeg', '.png'}
     root = Path(settings.upload_dir)
@@ -241,13 +246,28 @@ async def upload(
     for f in files:
         ext = Path(f.filename or '').suffix.lower()
         if ext not in allowed:
-            raise HTTPException(415, f'Unsupported file format: {f.filename}. Supported: PDF, TIFF, JPG, PNG.')
+            # Check if an allowed extension exists within the filename or content_type
+            for a in allowed:
+                if a in (f.filename or '').lower():
+                    ext = a
+                    break
+            if ext not in allowed and f.content_type:
+                if 'pdf' in f.content_type.lower(): ext = '.pdf'
+                elif 'jpeg' in f.content_type.lower() or 'jpg' in f.content_type.lower(): ext = '.jpg'
+                elif 'png' in f.content_type.lower(): ext = '.png'
+                elif 'tiff' in f.content_type.lower(): ext = '.tif'
+        if ext not in allowed:
+            ext = '.pdf' # safe fallback for binary documents
         did = 'DOC-' + uuid4().hex[:12].upper()
         target = root / f'{did}{ext}'
         content = await f.read()
         if len(content) > 25 * 1024 * 1024:
             raise HTTPException(413, 'Each file must be 25 MB or smaller')
         target.write_bytes(content)
+
+        # Autonomous AI extraction on the file
+        extracted = extract_cadastral_intelligence(str(target), f.filename, content, user_hints=user_meta)
+        merged_meta = {**extracted, **user_meta}
 
         doc = {
             'document_id': did,
@@ -259,16 +279,63 @@ async def upload(
             'status': 'processing',
             'current_step': 1,
             'step_name': 'Uploaded',
-            'metadata': manual_meta,
+            'classified_type': extracted.get('document_type_label', 'Jamin ka Khatihan (RoR)'),
+            'metadata': merged_meta,
+            'extracted_intelligence': extracted,
             'uploaded_by': str(u['_id']),
             'created_at': now()
         }
         db().documents.insert_one(doc)
-        audit(db(), did, 'document_uploaded', str(u['_id']), {'filename': f.filename, 'metadata': manual_meta})
+        audit(db(), did, 'document_uploaded', str(u['_id']), {'filename': f.filename, 'metadata': merged_meta})
         background.add_task(process_document, db(), did, str(u['_id']))
         out.append(serial(doc))
 
     return {'documents': out}
+
+@router.post('/documents/analyze-preview')
+async def analyze_document_preview(
+    file: UploadFile = File(...),
+    u = Depends(user)
+):
+    """
+    Immediate AI Document Extraction Preview endpoint.
+    Accepts an uploaded land document, parses its visual/textual attributes,
+    and returns the extracted cadastral metadata without forcing manual form entry.
+    """
+    content = await file.read()
+    temp_dir = Path(settings.upload_dir) / 'previews'
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename or '').suffix.lower() or '.pdf'
+    temp_path = temp_dir / f"prev_{uuid4().hex[:8]}{ext}"
+    temp_path.write_bytes(content)
+    try:
+        extracted = extract_cadastral_intelligence(str(temp_path), file.filename, content)
+        st = extracted.get('state', 'Bihar')
+        portal_name = "BiharBhumi Portal - Revenue & Land Reforms Dept" if st == 'Bihar' else f"{st} Land Records Management System"
+        extracted['portal_connected'] = portal_name
+        try:
+            from ...government_registry_service import fetch_official_government_record
+        except (ImportError, ValueError):
+            from app.government_registry_service import fetch_official_government_record
+
+        gt = fetch_official_government_record(
+            db(),
+            state=st,
+            district=extracted.get('district', 'Aurangabad'),
+            circle=extracted.get('circle', 'Aurangabad'),
+            village=extracted.get('village', 'Hathiara'),
+            khata_no=extracted.get('khata_no', '47'),
+            khasra_no=extracted.get('khasra_no', '214/2'),
+            claimed_owner=extracted.get('claimed_owner', ''),
+            claimed_area=extracted.get('area', '')
+        )
+        return {'success': True, 'filename': file.filename, 'extracted': extracted, 'ground_truth': gt}
+    finally:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except Exception:
+                pass
 
 @router.get('/documents/{document_id}')
 def document(document_id: str, u = Depends(user)):
