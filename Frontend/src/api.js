@@ -10,6 +10,8 @@ async function request(path, options = {}) {
   const headers = new Headers(options.headers || {});
   const token = localStorage.getItem('nirvivaad_token');
   if (token) headers.set('Authorization', `Bearer ${token}`);
+  const apiKey = localStorage.getItem('nirvivaad_api_key') || 'NIRV-KEY-GOV-2026';
+  headers.set('X-API-Key', apiKey);
   if (options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
@@ -72,6 +74,8 @@ export const api = {
   govPortals: () => request('/government/portals'),
   integrations: () => request('/integrations/status'),
   gisParcel: p => request('/gis/parcel?' + new URLSearchParams(p).toString()),
-  gisStatus: () => request('/gis/status')
+  gisStatus: () => request('/gis/status'),
+  verifiedAmins: () => request('/admin/verified-amins'),
+  verifyFlow: p => request('/verify-flow', { method: 'POST', body: JSON.stringify(p) })
 };
 

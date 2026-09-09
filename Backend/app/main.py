@@ -100,15 +100,25 @@ async def lifespan(_: FastAPI):
         logger.exception(
             "MongoDB index setup failed; starting API without indexes"
         )
-    if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
-        try:
-            from .db.mongo import get_database
-            database = get_database()
+    try:
+        from .db.mongo import get_database
+        database = get_database()
+        from .seed_data import seed_official_land_data
+        seed_official_land_data(database)
+        if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
             if not database.users.find_one({"email": settings.bootstrap_admin_email.lower()}):
-                database.users.insert_one({"name": "Platform Administrator", "email": settings.bootstrap_admin_email.lower(), "password_hash": hash_password(settings.bootstrap_admin_password), "role": "admin", "active": True, "created_at": now()})
+                database.users.insert_one({
+                    "name": "Platform Administrator",
+                    "email": settings.bootstrap_admin_email.lower(),
+                    "password_hash": hash_password(settings.bootstrap_admin_password),
+                    "role": "admin",
+                    "gov_amin_id": "AMIN-GOV-2024-BIH001",
+                    "active": True,
+                    "created_at": now()
+                })
                 logger.info("Bootstrap administrator created")
-        except Exception:
-            logger.exception("Bootstrap administrator setup failed")
+    except Exception:
+        logger.exception("Database seeding or bootstrap admin setup failed")
 
     yield
 

@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import io
 import time
@@ -83,7 +83,7 @@ def run_tests():
     print(f"[PASS] 6. Login using Email '{test_email}': Success")
 
     # 7. Document Upload with Classification & Crucial Land Metadata
-    dummy_pdf = io.BytesIO(b"%PDF-1.4 dummy land khatihan content for verification testing")
+    dummy_pdf = io.BytesIO(b"%PDF-1.4 Bihar Land Revenue Khatihan Panji Record Khata 47 Khasra 214/2 Rameshwar Sah Muzaffarpur Kanti")
     upload_headers = {"Authorization": f"Bearer {token}"}
     upload_data = {
         "document_type": "jamin_khatihan",
