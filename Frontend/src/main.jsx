@@ -526,6 +526,17 @@ function Dashboard({ d, goView }) {
   const [pendingList, setPendingList] = useState([]);
   const [activeVerifyRecord, setActiveVerifyRecord] = useState(null);
 
+  const totalProc = d?.documents_processed ?? 0;
+  const verified = d?.verified_records ?? 0;
+  const pending = d?.pending_tasks ?? 0;
+  const errors = d?.error_cases ?? 0;
+
+  const totalValidations = verified + pending + errors;
+  const pctVerified = totalValidations ? Math.round((verified / totalValidations) * 100) : 100;
+  const pctPending = totalValidations ? Math.round((pending / totalValidations) * 100) : 0;
+  const pctFlagged = totalValidations ? Math.round((errors / totalValidations) * 100) : 0;
+  const recentList = d?.recent_activity || [];
+
   const loadPendingRecords = () => {
     api.records().then(recs => {
       const needsReview = (recs || []).filter(r => r.status === 'needs_review' || r.status === 'pending');
@@ -2938,6 +2949,39 @@ function Admin() {
   );
 }
 
+// Graceful Error Boundary to prevent whole-screen blankout
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught error:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, textAlign: 'center', background: '#FFFDF9', borderRadius: 8, margin: 20, border: '1px solid #EAD8B8' }}>
+          <h3 style={{ color: '#8A421D', marginBottom: 8 }}>View Notice</h3>
+          <p style={{ color: '#5C4A3A', marginBottom: 16 }}>{this.state.error?.message || 'An error occurred while displaying this section.'}</p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ background: '#1D5141', color: '#FFF', padding: '8px 16px', borderRadius: 6, border: 'none', cursor: 'pointer' }}
+            onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
+          >
+            Reload Section
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // MAIN APP COMPONENT WITH HASH ROUTING & PROMINENT LOGOUT
 function App() {
   const [user, setUser] = useState();
@@ -3100,7 +3144,11 @@ function App() {
 
       <main>
         {err && <p className="notice">{err}</p>}
-        <section className="view active">{body}</section>
+        <section className="view active">
+          <ErrorBoundary key={v}>
+            {body}
+          </ErrorBoundary>
+        </section>
         <footer className="appfoot">
           <span>NIRVIVAAD · National Intelligence for Record Verification, Integrity, Validation And Anomaly Detection</span>
           <span>Official Land Record Intelligence &amp; Multi-Check Validation Engine</span>
