@@ -293,9 +293,10 @@ async def upload(
             raise HTTPException(413, 'Each file must be 25 MB or smaller')
         target.write_bytes(content)
 
-        # Autonomous AI extraction on the file
+        # Autonomous AI extraction on the file (3-State Classification & Evidence-First)
         extracted = extract_cadastral_intelligence(str(target), f.filename, content, user_hints=user_meta)
-        if not extracted.get('is_land_document', True):
+        class_state = extracted.get('classification_state', 'LAND')
+        if not extracted.get('is_land_document', True) or class_state == 'NON_LAND':
             if target.exists():
                 try: target.unlink()
                 except Exception: pass
@@ -304,6 +305,7 @@ async def upload(
                 detail=extracted.get('error', 'Upload rejected: Invalid document. Please upload valid land-related documents only (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney, Dakhil Kharij).')
             )
         merged_meta = {**extracted, **user_meta}
+        is_unknown = (class_state == 'UNKNOWN')
 
         doc = {
             'document_id': did,
@@ -312,18 +314,25 @@ async def upload(
             'content_type': f.content_type,
             'size_bytes': len(content),
             'languages': [x.strip() for x in languages.split(',') if x.strip()],
-            'status': 'processing',
-            'current_step': 1,
-            'step_name': 'Uploaded',
+            'status': 'needs_review' if is_unknown else 'processing',
+            'current_step': 4 if is_unknown else 1,
+            'step_name': 'Human-Assisted Amin Verification Workflow' if is_unknown else 'Uploaded',
+            'classification_state': class_state,
             'classified_type': extracted.get('document_type_label', 'Jamin ka Khatihan (RoR)'),
+            'sha256_hash': extracted.get('sha256_hash', ''),
+            'fields_provenance': extracted.get('fields_provenance', {}),
+            'uncertain_fields': extracted.get('uncertain_fields', []),
+            'sih_compliance': extracted.get('sih_compliance', {}),
+            'tech_stack_metadata': extracted.get('tech_stack_metadata', {}),
             'metadata': merged_meta,
             'extracted_intelligence': extracted,
             'uploaded_by': str(u['_id']),
             'created_at': now()
         }
         db().documents.insert_one(doc)
-        audit(db(), did, 'document_uploaded', str(u['_id']), {'filename': f.filename, 'metadata': merged_meta})
-        background.add_task(process_document, db(), did, str(u['_id']))
+        audit(db(), did, 'document_uploaded', str(u['_id']), {'filename': f.filename, 'classification_state': class_state, 'sha256_hash': extracted.get('sha256_hash')})
+        if not is_unknown:
+            background.add_task(process_document, db(), did, str(u['_id']))
         out.append(serial(doc))
 
     return {'documents': out}
@@ -364,9 +373,10 @@ async def analyze_document_preview(
     temp_path = temp_dir / f"prev_{uuid4().hex[:8]}{ext}"
     temp_path.write_bytes(content)
     try:
-        # 2 & 3. Permission check & Request process
+        # 2 & 3. Permission check & Request process (3-State Classification)
         extracted = extract_cadastral_intelligence(str(temp_path), file.filename, content)
-        if not extracted.get('is_land_document', True):
+        class_state = extracted.get('classification_state', 'LAND')
+        if not extracted.get('is_land_document', True) or class_state == 'NON_LAND':
             raise HTTPException(
                 status_code=400,
                 detail=extracted.get('error', 'Upload rejected: Invalid document. Please upload valid land-related documents only (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney, Dakhil Kharij).')
@@ -410,7 +420,9 @@ async def analyze_document_preview(
             "step_3_request_process": {
                 "step": "3. Request process",
                 "status": "PASS",
-                "details": f"Autonomous Cadastral Extraction Complete ({extracted.get('document_type_label')})"
+                "classification_state": class_state,
+                "confidence": extracted.get('classification_confidence', 0.95),
+                "details": f"Autonomous Cadastral Extraction Complete ({extracted.get('document_type_label')}) — State: {class_state}"
             },
             "step_4_data_source": {
                 "step": "4. Data source",

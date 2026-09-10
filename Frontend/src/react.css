@@ -2169,3 +2169,279 @@
   background: #E2EFF9;
   color: #185382;
 }
+
+/* ==========================================================================
+   SIH 2026 ARCHITECTURE & CHATGPT 3-STATE CLASSIFICATION / PROVENANCE MATRIX
+   ========================================================================== */
+
+/* 3-State Classification Card */
+.three-state-banner {
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+  border: 1.5px solid transparent;
+}
+.three-state-banner.land {
+  background: #F0F8F4;
+  border-color: #2D6A4F;
+}
+.three-state-banner.unknown {
+  background: #FEF9EE;
+  border-color: #D9822B;
+}
+.three-state-banner.non-land {
+  background: #FDF2F0;
+  border-color: #D32F2F;
+}
+.tsb-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.tsb-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tsb-state-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tsb-state-pill.land {
+  background: #195B42;
+  color: #FFFFFF;
+}
+.tsb-state-pill.unknown {
+  background: #D9822B;
+  color: #FFFFFF;
+}
+.tsb-state-pill.non-land {
+  background: #D32F2F;
+  color: #FFFFFF;
+}
+.tsb-hashes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.hash-pill {
+  background: #FFFFFF;
+  border: 1px solid #CFDDD4;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: #274E3C;
+}
+
+/* SIH Tabs */
+.sih-tab-bar {
+  display: flex;
+  gap: 6px;
+  margin: 16px 0 14px;
+  border-bottom: 2px solid #DFECE4;
+  padding-bottom: 1px;
+  overflow-x: auto;
+}
+.sih-tab-btn {
+  background: none;
+  border: none;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #557766;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.sih-tab-btn:hover {
+  color: #1A543A;
+  background: #F4F9F6;
+}
+.sih-tab-btn.active {
+  color: #144933;
+  border-bottom-color: #144933;
+  background: #EAF4EE;
+  border-radius: 4px 4px 0 0;
+}
+
+/* Field-by-Field Provenance Table */
+.provenance-table-container {
+  overflow-x: auto;
+  border-radius: 6px;
+  border: 1px solid #D5E5DC;
+  background: #FFFFFF;
+  margin-top: 10px;
+}
+.provenance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.provenance-table th {
+  background: #EBF3EE;
+  color: #174E37;
+  font-weight: 700;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid #D5E5DC;
+}
+.provenance-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #EDF3F0;
+  color: #243E32;
+  vertical-align: middle;
+}
+.provenance-table tr:hover td {
+  background: #F9FCFA;
+}
+.prov-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.prov-badge.exact {
+  background: #E0F2E8;
+  color: #10633B;
+}
+.prov-badge.uncertain {
+  background: #FFF2D6;
+  color: #8C5B0C;
+}
+.prov-badge.missing {
+  background: #FDECEA;
+  color: #A32D20;
+}
+
+/* Uncertain Fields Warning Banner */
+.uncertain-warning-banner {
+  background: #FFF8E6;
+  border: 1px solid #F3C472;
+  border-left: 4px solid #D9822B;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 12px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  color: #7B4C0A;
+}
+
+/* SIH 15-Point Requirements Deck */
+.sih-points-deck {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.sih-point-card {
+  background: #FFFFFF;
+  border: 1px solid #D2E4D9;
+  border-radius: 6px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+}
+.sih-point-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.sih-point-num {
+  font-size: 11px;
+  font-weight: 800;
+  color: #16533A;
+}
+.sih-point-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #DEF0E4;
+  color: #135E38;
+}
+.sih-point-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1C3E30;
+  margin: 2px 0 4px;
+}
+.sih-point-desc {
+  font-size: 11px;
+  color: #557566;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* SIH Tech Stack Matrix */
+.tech-stack-matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.tech-stack-group {
+  background: #FFFFFF;
+  border: 1px solid #D8E7DF;
+  border-radius: 6px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+}
+.tech-stack-group h5 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #164835;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tech-badges-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.tech-pill {
+  background: #F0F6F3;
+  border: 1px solid #C4DCCE;
+  color: #1A543A;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+
+/* Role Action Bar */
+.role-action-bar {
+  background: #EBF4EE;
+  border: 1.5px solid #236B4A;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.role-badge-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #154D36;
+}
+
