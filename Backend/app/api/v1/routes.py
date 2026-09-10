@@ -384,9 +384,9 @@ async def analyze_document_preview(
         gt = fetch_official_government_record(
             db(),
             state=st,
-            district=extracted.get('district', 'Aurangabad'),
-            circle=extracted.get('circle', 'Aurangabad'),
-            village=extracted.get('village', 'Hathiara'),
+            district=extracted.get('district', ''),
+            circle=extracted.get('circle', ''),
+            village=extracted.get('village', ''),
             khata_no=extracted.get('khata_no', ''),
             khasra_no=extracted.get('khasra_no', ''),
             claimed_owner=extracted.get('claimed_owner', ''),

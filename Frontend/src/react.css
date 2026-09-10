@@ -2047,3 +2047,125 @@
 .fgc-item b {
   color: #0E5E38;
 }
+
+/* 10-Point Cadastral Intelligence & Title Health Console */
+.cadastral-10point-console {
+  background: #F4F9F6;
+  border: 1.5px solid #206E49;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 20px 0;
+  box-shadow: 0 4px 16px rgba(32, 110, 73, 0.08);
+}
+.c10-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #CFE2D7;
+  padding-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.c10-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.c10-title h4 {
+  margin: 0;
+  font-size: 15px;
+  color: #12402E;
+  font-weight: 700;
+}
+.c10-title p {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: #3F6755;
+}
+.c10-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.c10-card {
+  background: #FFFFFF;
+  border: 1px solid #CCDED3;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.15s ease;
+}
+.c10-card:hover {
+  border-color: #206E49;
+  box-shadow: 0 2px 8px rgba(32, 110, 73, 0.1);
+}
+.c10-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+.c10-num {
+  font-size: 10px;
+  font-weight: 800;
+  color: #1E6644;
+  background: #EAF4EE;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.c10-lbl {
+  display: block;
+  font-size: 11px;
+  color: #557265;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.c10-val {
+  display: block;
+  font-size: 13px;
+  color: #113426;
+  font-weight: 700;
+  word-break: break-word;
+  line-height: 1.35;
+}
+.c10-val.mono {
+  font-family: monospace;
+  font-size: 13.5px;
+  letter-spacing: 0.5px;
+  color: #0E5E38;
+}
+.c10-sub {
+  display: block;
+  font-size: 10.5px;
+  color: #607F70;
+  margin-top: 5px;
+  border-top: 1px dashed #E2ECE5;
+  padding-top: 4px;
+}
+.c10-badge {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.c10-badge.green {
+  background: #DEF0E4;
+  color: #145934;
+}
+.c10-badge.red {
+  background: #FCE8E6;
+  color: #9B281B;
+}
+.c10-badge.amber {
+  background: #FEF3D6;
+  color: #8A5F11;
+}
+.c10-badge.blue {
+  background: #E2EFF9;
+  color: #185382;
+}
