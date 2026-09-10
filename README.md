@@ -413,7 +413,7 @@ Start Backend:
 ```powershell
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-Backend API will be live at `http://127.0.0.1:8000`. Interactive docs at `http://127.0.0.1:8000/docs`.
+Backend API will be live at `https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com`. Interactive docs at `https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/docs`.
 
 ### Step 3: Frontend Setup
 In a new terminal window:
@@ -422,7 +422,7 @@ cd Frontend
 npm install
 npm run dev
 ```
-Open `http://localhost:5173` in your browser.
+Open `https://nirvivaad.vercel.app/` in your browser.
 
 ---
 
