@@ -419,12 +419,19 @@ async def analyze_document_preview(
                 "details": "Queried on-record cadastral registry ground truth"
             }
         }
+        try:
+            from ...services import evaluate_with_openai_or_rules
+        except (ImportError, ValueError):
+            from app.services import evaluate_with_openai_or_rules
+        eval_report = evaluate_with_openai_or_rules(extracted, gt, file.filename)
+
         return {
             'success': True,
             'filename': file.filename,
             'extracted': extracted,
             'ground_truth': gt,
-            'verification_flow': verification_flow
+            'verification_flow': verification_flow,
+            'validation_report': eval_report
         }
     finally:
         if temp_path.exists():

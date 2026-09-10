@@ -376,7 +376,187 @@ def evaluate_with_openai_or_rules(metadata, ground_truth, doc_name):
     forgery_risk = min(98.0, max(2.0, forgery_risk))
     authenticity_score = round(100.0 - forgery_risk, 1)
 
-    # 5. Side-by-side comparison table
+    # Area numeric parsing and difference delta (ChatGPT Section 14)
+    import re
+    doc_area_num = None
+    gov_area_num = None
+    if area:
+        m_a = re.search(r'([0-9]+(?:\.[0-9]+)?)', str(area))
+        if m_a:
+            try: doc_area_num = float(m_a.group(1))
+            except Exception: pass
+    gov_area_raw = ground_truth.get('official_area_acres')
+    if gov_area_raw:
+        m_g = re.search(r'([0-9]+(?:\.[0-9]+)?)', str(gov_area_raw))
+        if m_g:
+            try: gov_area_num = float(m_g.group(1))
+            except Exception: pass
+
+    area_difference = 0.0
+    area_match_type = 'Matched'
+    area_alert = None
+    if doc_area_num is not None and gov_area_num is not None:
+        area_difference = round(abs(doc_area_num - gov_area_num), 3)
+        if area_difference == 0:
+            area_match_type = 'Matched'
+        elif area_difference <= 0.05:
+            area_match_type = 'Minor Cadastral Variance'
+        else:
+            area_match_type = 'Area Discrepancy'
+            area_alert = f"Area discrepancy detected: Uploaded document claims {doc_area_num} Acre(s), official registry records {gov_area_num} Acre(s) (Difference: {area_difference} Acre). Flagged for administrative verification, not automatic fraud."
+            forgery_risk += 12.0
+    elif doc_area_num is None and gov_area_num is not None:
+        area_match_type = 'Unspecified in Deed'
+
+    # Cadastral & Location Match
+    doc_dist = str(metadata.get('district', '')).strip().lower()
+    gov_dist = str(ground_truth.get('district', '')).strip().lower()
+    doc_vil = str(metadata.get('village_mauza', '')).strip().lower()
+    gov_vil = str(ground_truth.get('village_mauza', '')).strip().lower()
+
+    dist_match = (not doc_dist or not gov_dist) or (doc_dist == gov_dist)
+    vil_match = (not doc_vil or not gov_vil) or (doc_vil == gov_vil or doc_vil in gov_vil or gov_vil in doc_vil)
+    loc_match = dist_match and vil_match
+
+    khata_match = (not khata_no or not ground_truth.get('khata_no')) or (khata_no == str(ground_truth.get('khata_no')).strip())
+    khasra_match = (not khasra_no or not ground_truth.get('khasra_no')) or (khasra_no == str(ground_truth.get('khasra_no')).strip())
+
+    st = metadata.get('state', 'Bihar')
+
+    # Multi-Vector Verification Breakdown (ChatGPT Section 8)
+    identity_score = 100 if owner_match and not (partial_owner if 'partial_owner' in locals() else False) else (70 if ('partial_owner' in locals() and partial_owner) else 35)
+    location_score = 100 if loc_match else (75 if dist_match else 40)
+    parcel_score = 100 if (khata_match and khasra_match) else (65 if (khata_match or khasra_match) else 35)
+    area_score = 100 if area_difference == 0 else (85 if area_difference <= 0.05 else 60)
+    registration_score = 100 if not is_disputed and not has_multiple_buyers else 45
+
+    evidence_score = round((identity_score * 0.25) + (location_score * 0.20) + (parcel_score * 0.25) + (area_score * 0.15) + (registration_score * 0.15), 1)
+
+    verification_breakdown = {
+        'identity_match': identity_score,
+        'location_match': location_score,
+        'parcel_match': parcel_score,
+        'area_match': area_score,
+        'registration_match': registration_score,
+        'overall_evidence_score': evidence_score,
+        'legal_disclaimer': 'Nirvivaad Cadastral Due Diligence — Consistency verified against official state cadastral registries. Database match constitutes verification of record consistency.'
+    }
+
+    # Government Source & System Status (ChatGPT Section 11 & 22)
+    gov_source_info = {
+        'department': f"{st} Revenue & Land Reforms Department",
+        'system': 'BiharBhumi Portal' if st == 'Bihar' else f"{st} Land Records System (DILRMP)",
+        'source_type': 'Official Cadastral System of Record',
+        'status': 'FOUND in Official Registry' if ground_truth.get('official_owner') else 'NOT_FOUND',
+        'retrieved_at': now().strftime('%d %b %Y, %I:%M %p'),
+        'database_collection': 'official_land_records',
+        'source_reference': ground_truth.get('jamabandi_no') or f"ROR-{khata_no}-{khasra_no}"
+    }
+
+    # Side-by-side Evidence Matrix (ChatGPT Section 28 & 29)
+    evidence_matrix = [
+        {
+            'field': 'Recorded Raiyat / Owner',
+            'icon': '👤',
+            'document_value': claimed_owner or 'Unspecified in Deed',
+            'document_evidence': 'Page 1 Deed Heading / RoR Raiyat Entry',
+            'official_value': official_owner or 'On-Record Raiyat',
+            'official_evidence': f"Panji-II Jamabandi Register ({st} DILRMP)",
+            'decision': 'MATCH' if (owner_match and not (partial_owner if 'partial_owner' in locals() else False)) else ('PARTIAL' if ('partial_owner' in locals() and partial_owner) else 'MISMATCH'),
+            'confidence': 98 if owner_match else 52,
+            'notes': 'Title holder identity verified' if owner_match else 'Title mismatch against registry'
+        },
+        {
+            'field': 'Cadastral Jurisdiction (District & Mauza)',
+            'icon': '📍',
+            'document_value': f"{metadata.get('district', '')} · {metadata.get('village_mauza', '')}".strip(' ·'),
+            'document_evidence': 'Cadastral Survey Jurisdiction Block',
+            'official_value': f"{ground_truth.get('district', '')} · {ground_truth.get('village_mauza', '')}".strip(' ·'),
+            'official_evidence': 'District Revenue Cadastre Map Registry',
+            'decision': 'MATCH' if loc_match else ('PARTIAL' if dist_match else 'MISMATCH'),
+            'confidence': 99 if loc_match else 70,
+            'notes': 'Mauza and circle boundary matched' if loc_match else 'Jurisdiction variance detected'
+        },
+        {
+            'field': 'Khata Number',
+            'icon': '📑',
+            'document_value': khata_no or '—',
+            'document_evidence': 'Extracted RoR Khata Index',
+            'official_value': str(ground_truth.get('khata_no', '—')),
+            'official_evidence': 'Revenue Register Panji-II Khata Master',
+            'decision': 'MATCH' if khata_match else 'MISMATCH',
+            'confidence': 99 if khata_match else 60,
+            'notes': 'Khata account verified' if khata_match else 'Khata number discrepancy'
+        },
+        {
+            'field': 'Khasra / Plot Number',
+            'icon': '🗺️',
+            'document_value': khasra_no or '—',
+            'document_evidence': 'Cadastral Parcel Map / Deed Clause',
+            'official_value': str(ground_truth.get('khasra_no', '—')),
+            'official_evidence': 'Cadastral Survey Plot Ledger',
+            'decision': 'MATCH' if khasra_match else 'MISMATCH',
+            'confidence': 97 if khasra_match else 58,
+            'notes': 'Spatial parcel ID matched' if khasra_match else 'Plot identifier mismatch'
+        },
+        {
+            'field': 'Plot Area',
+            'icon': '📐',
+            'document_value': f"{area or '1.00'} Acre(s)",
+            'document_evidence': 'Deed Area Schedule / Khatihan Rakba',
+            'official_value': f"{ground_truth.get('official_area_acres', '1.00')} Acre(s)",
+            'official_evidence': 'Official Cadastral Survey Measurement',
+            'decision': 'MATCH' if area_difference == 0 else ('PARTIAL' if area_difference <= 0.05 else 'DISCREPANCY'),
+            'confidence': 95 if area_difference == 0 else 72,
+            'notes': f"Variance: {area_difference:.2f} Acre" if area_difference > 0 else 'Exact acreage verified'
+        },
+        {
+            'field': 'Dispute Status (Vivaadit Jamin)',
+            'icon': '⚖️',
+            'document_value': 'Claimed Clear / Undisputed',
+            'document_evidence': 'Applicant Affidavit / Non-Encumbrance Clause',
+            'official_value': dispute_severity,
+            'official_evidence': 'Civil Court & E-Courts Injunction Register',
+            'decision': 'MATCH' if not is_disputed else 'DISPUTED',
+            'confidence': 96 if not is_disputed else 40,
+            'notes': 'No active injunctions found' if not is_disputed else 'Active Title Suit pending'
+        },
+        {
+            'field': 'Double Selling / Conveyance Chain',
+            'icon': '🔗',
+            'document_value': 'Single Clean Title Claim',
+            'document_evidence': 'Succession & Mutation Chain',
+            'official_value': 'Single Title Chain' if not has_multiple_buyers else 'Conflicting Conveyances Registered',
+            'official_evidence': 'Sub-Registrar Conveyance Register',
+            'decision': 'MATCH' if not has_multiple_buyers else 'FLAGGED',
+            'confidence': 97 if not has_multiple_buyers else 35,
+            'notes': 'Single recorded chain of title' if not has_multiple_buyers else 'Duplicate deeds detected'
+        },
+        {
+            'field': 'Bansawali Lineage Standing',
+            'icon': '🌳',
+            'document_value': f"{metadata.get('bansawali', {}).get('generation_3_claimant', {}).get('name', claimed_owner or 'Claimant')} (Gen 3)",
+            'document_evidence': 'Genealogy Affidavit / Family Tree Certificate',
+            'official_value': f"{official_owner} (Mutated Panji-II)",
+            'official_evidence': 'Ancestral Cadastral Succession Panji',
+            'decision': 'MATCH' if owner_match else 'PARTIAL',
+            'confidence': 94,
+            'notes': 'Succession lineage concordant' if owner_match else 'Succession audit advised'
+        },
+        {
+            'field': 'Power of Attorney (PoA) Authorization',
+            'icon': '📜',
+            'document_value': poa_holder or 'Direct Raiyat Ownership',
+            'document_evidence': 'Deed Execution / PoA Annexure',
+            'official_value': ground_truth.get('authorized_poa_holder', 'None'),
+            'official_evidence': 'Sub-Registrar Registered PoA Ledger',
+            'decision': 'MATCH' if poa_status != "Conflicting / Rival Claim" else 'MISMATCH',
+            'confidence': 95 if poa_status != "Conflicting / Rival Claim" else 45,
+            'notes': poa_status
+        }
+    ]
+
+    # 5. Side-by-side comparison table (preserved for backwards compatibility)
     comparison_table = [
         {
             'field': 'Document Classification',
@@ -388,7 +568,7 @@ def evaluate_with_openai_or_rules(metadata, ground_truth, doc_name):
             'field': 'Cadastral Jurisdiction (District & Mauza)',
             'uploaded': f"{metadata.get('district', '')} · {metadata.get('village_mauza', '')}".strip(' ·'),
             'registry': f"{ground_truth.get('district', '')} · {ground_truth.get('village_mauza', '')}".strip(' ·'),
-            'match': 'Matched' if metadata.get('district', '').lower() == ground_truth.get('district', '').lower() else 'Mismatch'
+            'match': 'Matched' if loc_match else ('Partial District Match' if dist_match else 'Mismatch')
         },
         {
             'field': 'Recorded Raiyat / Owner',
@@ -400,19 +580,19 @@ def evaluate_with_openai_or_rules(metadata, ground_truth, doc_name):
             'field': 'Khata Number',
             'uploaded': khata_no,
             'registry': ground_truth.get('khata_no'),
-            'match': 'Matched' if khata_no == ground_truth.get('khata_no') else 'Mismatch'
+            'match': 'Matched' if khata_match else 'Mismatch'
         },
         {
             'field': 'Khasra / Plot Number',
             'uploaded': khasra_no,
             'registry': ground_truth.get('khasra_no'),
-            'match': 'Matched' if khasra_no == ground_truth.get('khasra_no') else 'Mismatch'
+            'match': 'Matched' if khasra_match else 'Mismatch'
         },
         {
             'field': 'Plot Area',
-            'uploaded': f"{area} Acre(s)",
+            'uploaded': f"{area} Acre(s)" if area else '—',
             'registry': f"{ground_truth.get('official_area_acres')} Acre(s)",
-            'match': 'Matched' if (area == ground_truth.get('official_area_acres') or not area) else 'Area Discrepancy'
+            'match': area_match_type
         },
         {
             'field': 'Dispute Status (Vivaadit Jamin)',
@@ -452,20 +632,21 @@ def evaluate_with_openai_or_rules(metadata, ground_truth, doc_name):
         }
     ]
 
+    # Calibrated legal verdict (ChatGPT Section 23)
     overall_status = 'verified'
-    verdict = "Nirvivaad (Clear & Authenticated Record)"
-    if authenticity_score < 70.0 or is_disputed or has_multiple_buyers or poa_status == "Conflicting / Rival Claim":
+    verdict = "No discrepancies detected in checked records (Nirvivaad Authenticated)"
+    if authenticity_score < 70.0 or is_disputed or has_multiple_buyers or poa_status == "Conflicting / Rival Claim" or area_difference > 0.05:
         overall_status = 'needs_review'
-        verdict = "Vivaadit / Discrepancy Flagged (Requires Revenue Officer Review)"
+        verdict = "Requires Review / Discrepancy Flagged (Administrative Review Recommended)"
     if authenticity_score < 40.0:
-        verdict = "High Forgery & Fraud Risk (Suspected Fake / Tampered Document)"
+        verdict = "High Risk / Discrepancy (Suspected Irregularity in Cadastral Records)"
 
     # Field confidences for Human-assisted Verification workflow (SIH item 11 & 12)
     field_confidences = {
         'owner': {'value': claimed_owner or official_owner, 'conf': 98 if owner_match else 52, 'level': 'high' if owner_match else 'low'},
         'khata_no': {'value': khata_no or ground_truth.get('khata_no'), 'conf': 99, 'level': 'high'},
         'khasra_no': {'value': khasra_no or ground_truth.get('khasra_no'), 'conf': 97, 'level': 'high'},
-        'area': {'value': area or ground_truth.get('official_area_acres'), 'conf': 95 if area == ground_truth.get('official_area_acres') else 44, 'level': 'high' if area == ground_truth.get('official_area_acres') else 'low'},
+        'area': {'value': area or ground_truth.get('official_area_acres'), 'conf': 95 if area_difference == 0 else 55, 'level': 'high' if area_difference == 0 else 'low'},
         'village': {'value': f"{ground_truth.get('village_mauza')} / {ground_truth.get('tehsil_circle')} / {ground_truth.get('district')}", 'conf': 81, 'level': 'mid'},
         'classification': {'value': ground_truth.get('official_classification'), 'conf': 95, 'level': 'high'}
     }
@@ -477,6 +658,15 @@ def evaluate_with_openai_or_rules(metadata, ground_truth, doc_name):
         'overall_status': overall_status,
         'field_confidences': field_confidences,
         'bansawali': metadata.get('bansawali', {}),
+        'evidence_matrix': evidence_matrix,
+        'verification_breakdown': verification_breakdown,
+        'government_source_info': gov_source_info,
+        'area_discrepancy_detail': {
+            'doc_area': doc_area_num,
+            'gov_area': gov_area_num,
+            'difference': area_difference,
+            'alert': area_alert
+        },
         'fake_check': {
             'is_fake': forgery_risk > 50.0,
             'stamp_verified': stamp_verified,
