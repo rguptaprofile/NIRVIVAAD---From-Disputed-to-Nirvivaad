@@ -413,7 +413,7 @@ Start Backend:
 ```powershell
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-Backend API will be live at `http://127.0.0.1:8000`. Interactive docs at `http://127.0.0.1:8000/docs`.
+Backend API will be live at `https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com`. Interactive docs at `https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/docs`.
 
 ### Step 3: Frontend Setup
 In a new terminal window:
@@ -422,7 +422,7 @@ cd Frontend
 npm install
 npm run dev
 ```
-Open `http://localhost:5173` in your browser.
+Open `https://nirvivaad.vercel.app/` in your browser.
 
 ---
 
@@ -472,10 +472,10 @@ Open `http://localhost:5173` in your browser.
 > **Official SIH 2026 Submission Deck Structure**: Use this content verbatim to generate your 6-slide presentation.
 
 ### 📄 SLIDE 1: Title & Team Information
-- **Problem Statement ID**: SIH-2026-GOV-1428
-- **Problem Statement Title**: AI-Based Legacy Land Record Digitization, Cadastral GIS Validation & Proactive Land Dispute Prevention System
-- **Theme**: Smart Automation / Governance & Citizen Services / Legal-Tech
-- **Team Name**: Team NIRVIVAAD
+- **Problem Statement ID**: SIH26018
+- **Problem Statement Title**: Intelligent Land Record Digitization and Validation System
+- **Theme**: Smart Automation
+- **Team Name**: Team Lunar
 - **Tagline**: *From Disputed to Nirvivaad (विवादित से निर्विवाद तक)* — Eliminating 66% of India's Civil Litigation Burden with Sovereign AI & Bhu-Aadhaar GIS.
 
 ### 📄 SLIDE 2: Proposed Solution
