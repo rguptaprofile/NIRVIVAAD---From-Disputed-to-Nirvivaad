@@ -120,6 +120,11 @@ function Auth({ done, go }) {
   const [busy, setBusy] = useState(false);
   const [regSuccess, setRegSuccess] = useState(null);
 
+  // Proactively ping backend to wake Render service during form interaction
+  useEffect(() => {
+    api.ping();
+  }, []);
+
   const signup = mode === 'signup';
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }));
 
@@ -308,10 +313,10 @@ function Auth({ done, go }) {
               ) : (
                 <>
                   <label>Unique Login ID or Email / Mobile
-                    <input required placeholder="e.g. NIRV-USR-12345 or user@example.com" value={f.login_id} onChange={e => set('login_id', e.target.value)} />
+                    <input required placeholder="e.g. NIRV-USR-12345 or user@example.com" value={f.login_id} onFocus={() => api.ping()} onChange={e => set('login_id', e.target.value)} />
                   </label>
                   <label>Password
-                    <input required type="password" placeholder="••••••••" value={f.password} onChange={e => set('password', e.target.value)} />
+                    <input required type="password" placeholder="••••••••" value={f.password} onFocus={() => api.ping()} onChange={e => set('password', e.target.value)} />
                   </label>
                 </>
               )}
@@ -3008,6 +3013,7 @@ function App() {
   }
 
   useEffect(() => {
+    api.ping();
     syncFromHash();
     window.addEventListener('hashchange', syncFromHash);
     return () => window.removeEventListener('hashchange', syncFromHash);
@@ -3057,7 +3063,7 @@ function App() {
     return page === 'about' ? (
       <About go={setPageWithHash} />
     ) : page === 'auth' ? (
-      <Auth done={u => { setUser(u); setViewWithHash('dashboard'); }} go={setPageWithHash} />
+      <Auth done={u => { setUser(u); setViewWithHash(u.role === 'admin' ? 'admin' : 'dashboard'); }} go={setPageWithHash} />
     ) : (
       <Landing go={setPageWithHash} />
     );

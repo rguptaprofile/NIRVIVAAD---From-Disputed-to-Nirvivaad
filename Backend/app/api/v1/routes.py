@@ -193,6 +193,11 @@ def register(p: RegisterRequest):
         'user': serial({**u, '_id': r.inserted_id})
     }
 
+@router.get('/auth/ping')
+def auth_ping():
+    """Pre-warming endpoint to eliminate Render cold boot latency"""
+    return {'status': 'ok', 'message': 'NIRVIVAAD Platform Online', 'timestamp': now()}
+
 @router.post('/auth/login')
 def login(p: LoginRequest):
     ident = p.login_id.strip()
@@ -206,9 +211,21 @@ def login(p: LoginRequest):
     })
     if not u or not verify_password(p.password, u['password_hash']):
         raise HTTPException(401, 'Incorrect login credentials. Please verify your Unique ID / Email and password.')
-    if p.role == 'admin' and u.get('role') != 'admin':
-        raise HTTPException(403, 'This account does not have administrator access')
-    audit(db(), str(u['_id']), 'user_logged_in', str(u['_id']))
+
+    # Strict Role Segregation
+    user_role = u.get('role', 'user')
+    if p.role == 'user' and user_role != 'user':
+        raise HTTPException(
+            403,
+            "Revenue Admin credentials detected. Please switch to the 'Revenue Admin' tab to sign in to your Administrator Console."
+        )
+    if p.role == 'admin' and user_role != 'admin':
+        raise HTTPException(
+            403,
+            "Citizen / Owner credentials cannot be used for Revenue Admin sign in. Please switch to the 'Citizen / Owner' tab to access your User Dashboard."
+        )
+
+    audit(db(), str(u['_id']), 'user_logged_in', str(u['_id']), {'role': user_role, 'login_id': ident})
     return {
         'access_token': create_access_token(str(u['_id'])),
         'user': serial(u)

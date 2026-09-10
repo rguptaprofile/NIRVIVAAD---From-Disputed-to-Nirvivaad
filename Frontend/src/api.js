@@ -38,6 +38,7 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  ping: () => request('/auth/ping').catch(() => ({})),
   me: () => request('/auth/me'),
   login: p => request('/auth/login', { method: 'POST', body: JSON.stringify(p) }),
   register: p => request('/auth/register', { method: 'POST', body: JSON.stringify(p) }),
