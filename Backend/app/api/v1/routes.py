@@ -212,23 +212,15 @@ def login(p: LoginRequest):
     if not u or not verify_password(p.password, u['password_hash']):
         raise HTTPException(401, 'Incorrect login credentials. Please verify your Unique ID / Email and password.')
 
-    # Strict Role Segregation
     user_role = u.get('role', 'user')
-    if p.role == 'user' and user_role != 'user':
-        raise HTTPException(
-            403,
-            "Revenue Admin credentials detected. Please switch to the 'Revenue Admin' tab to sign in to your Administrator Console."
-        )
-    if p.role == 'admin' and user_role != 'admin':
-        raise HTTPException(
-            403,
-            "Citizen / Owner credentials cannot be used for Revenue Admin sign in. Please switch to the 'Citizen / Owner' tab to access your User Dashboard."
-        )
+    target_view = 'admin' if user_role == 'admin' else 'dashboard'
 
     audit(db(), str(u['_id']), 'user_logged_in', str(u['_id']), {'role': user_role, 'login_id': ident})
     return {
         'access_token': create_access_token(str(u['_id'])),
-        'user': serial(u)
+        'user': serial(u),
+        'role': user_role,
+        'redirect_view': target_view
     }
 
 @router.get('/auth/me')

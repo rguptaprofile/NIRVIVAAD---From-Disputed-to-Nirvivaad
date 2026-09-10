@@ -162,7 +162,9 @@ function Auth({ done, go }) {
         };
         const r = await api.login(payload);
         localStorage.setItem('nirvivaad_token', r.access_token);
-        done(r.user);
+        const userObj = r.user || {};
+        const targetView = (userObj.role === 'admin' || r.role === 'admin') ? 'admin' : 'dashboard';
+        done(userObj, targetView);
       }
     } catch (err) {
       setError(err.message);
@@ -174,7 +176,8 @@ function Auth({ done, go }) {
   function proceedWithNewAccount() {
     if (regSuccess?.access_token) {
       localStorage.setItem('nirvivaad_token', regSuccess.access_token);
-      done(regSuccess.user);
+      const targetView = (regSuccess.user?.role === 'admin' || regSuccess.gov_amin_id) ? 'admin' : 'dashboard';
+      done(regSuccess.user, targetView);
     } else {
       setMode('signin');
       setRegSuccess(null);
@@ -313,7 +316,21 @@ function Auth({ done, go }) {
               ) : (
                 <>
                   <label>Unique Login ID or Email / Mobile
-                    <input required placeholder="e.g. NIRV-USR-12345 or user@example.com" value={f.login_id} onFocus={() => api.ping()} onChange={e => set('login_id', e.target.value)} />
+                    <input
+                      required
+                      placeholder="e.g. NIRV-USR-12345 or user@example.com"
+                      value={f.login_id}
+                      onFocus={() => api.ping()}
+                      onChange={e => {
+                        const val = e.target.value;
+                        set('login_id', val);
+                        if (val.toUpperCase().includes('ADM') || val.toLowerCase().includes('admin')) {
+                          setRole('admin');
+                        } else if (val.toUpperCase().includes('USR') || val.toLowerCase().includes('user')) {
+                          setRole('user');
+                        }
+                      }}
+                    />
                   </label>
                   <label>Password
                     <input required type="password" placeholder="••••••••" value={f.password} onFocus={() => api.ping()} onChange={e => set('password', e.target.value)} />
@@ -324,9 +341,46 @@ function Auth({ done, go }) {
               {error && <p className="notice">{error}</p>}
 
               <button className="auth-action" disabled={busy}>
-                {busy ? 'Verifying with system…' : signup ? `Generate Unique ID & Register` : `Sign in to workspace`} <span>→</span>
+                {busy ? 'Verifying with system…' : signup ? `Generate Unique ID & Register` : (role === 'admin' ? `Sign in to Admin Console →` : `Sign in to User Dashboard →`)}
               </button>
             </form>
+
+            {!signup && (
+              <div style={{ marginTop: 14, padding: 12, background: '#F5F9F6', borderRadius: 8, border: '1px solid #D2E4D9' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#164835', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                  Quick Demo Logins (Click to Autofill):
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="chip"
+                    style={{ fontSize: 11.5, padding: '5px 10px', background: '#FFFFFF', border: '1px solid #A8D1BD', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => {
+                      setRole('user');
+                      set('login_id', 'NIRV-USR-34991');
+                      set('password', 'Password@123');
+                    }}
+                  >
+                    <span>👤</span> <b>Citizen User</b> (NIRV-USR-34991)
+                  </button>
+                  <button
+                    type="button"
+                    className="chip"
+                    style={{ fontSize: 11.5, padding: '5px 10px', background: '#FFFFFF', border: '1px solid #A8D1BD', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => {
+                      setRole('admin');
+                      set('login_id', 'NIRV-ADM-91940');
+                      set('password', 'Password@123');
+                    }}
+                  >
+                    <span>🛡️</span> <b>Revenue Admin</b> (NIRV-ADM-91940)
+                  </button>
+                </div>
+                <div style={{ fontSize: 10.5, color: '#4E6F5E', marginTop: 6 }}>
+                  Password: <code style={{ background: '#E6F0EA', padding: '1px 4px', borderRadius: 3 }}>Password@123</code>
+                </div>
+              </div>
+            )}
 
             <p className="auth-switch">
               {signup ? 'Already have an account?' : 'New to NIRVIVAAD?'}{' '}
@@ -3035,15 +3089,37 @@ function App() {
     if (localStorage.getItem('nirvivaad_token')) {
       api.me()
         .then(x => {
-          setUser(x.user);
+          const u = x.user;
+          setUser(u);
           const h = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-          if (['home', 'about', 'auth', ''].includes(h)) {
-            setViewWithHash(x.user.role === 'admin' ? 'admin' : 'dashboard');
+          if (u.role === 'admin') {
+            if (!['admin', 'verify', 'records', 'reports'].includes(h)) {
+              setViewWithHash('admin');
+            }
+          } else {
+            if (!['dashboard', 'upload', 'records', 'reports'].includes(h)) {
+              setViewWithHash('dashboard');
+            }
           }
         })
         .catch(() => localStorage.removeItem('nirvivaad_token'));
     }
   }, []);
+
+  // Enforce role-appropriate views
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') {
+        if (!['admin', 'verify', 'records', 'reports'].includes(v)) {
+          setViewWithHash('admin');
+        }
+      } else {
+        if (!['dashboard', 'upload', 'records', 'reports'].includes(v)) {
+          setViewWithHash('dashboard');
+        }
+      }
+    }
+  }, [user, v]);
 
   useEffect(() => {
     if (user) {
@@ -3063,7 +3139,7 @@ function App() {
     return page === 'about' ? (
       <About go={setPageWithHash} />
     ) : page === 'auth' ? (
-      <Auth done={u => { setUser(u); setViewWithHash(u.role === 'admin' ? 'admin' : 'dashboard'); }} go={setPageWithHash} />
+      <Auth done={(u, target) => { setUser(u); setViewWithHash(target || (u.role === 'admin' ? 'admin' : 'dashboard')); }} go={setPageWithHash} />
     ) : (
       <Landing go={setPageWithHash} />
     );
