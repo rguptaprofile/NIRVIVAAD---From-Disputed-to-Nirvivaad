@@ -2265,18 +2265,18 @@ function Upload({ refresh, user }) {
                 </div>
 
                 {/* Q2: Kya document land-related hai? */}
-                <div className={`q-step-card ${fourQuestions.q2?.status === 'LAND' ? 'pass' : (fourQuestions.q2?.status === 'UNKNOWN' ? 'warn' : 'fail')}`}>
+                <div className={`q-step-card ${(fourQuestions.q2?.status === 'LAND_RELATED' || fourQuestions.q2?.status === 'LAND') ? 'pass' : ((fourQuestions.q2?.status === 'UNKNOWN/REVIEW' || fourQuestions.q2?.status === 'UNKNOWN') ? 'warn' : 'fail')}`}>
                   <div className="q-step-header">
                     <span className="q-badge">QUESTION 2</span>
-                    <span className={`q-status-pill ${fourQuestions.q2?.status === 'LAND' ? 'done' : (fourQuestions.q2?.status === 'UNKNOWN' ? 'review' : 'fail')}`}>
-                      {fourQuestions.q2?.status === 'LAND' ? '✓ LAND RECORD' : (fourQuestions.q2?.status === 'UNKNOWN' ? '⚠️ UNKNOWN (REVIEW)' : '🛑 NON-LAND')}
+                    <span className={`q-status-pill ${(fourQuestions.q2?.status === 'LAND_RELATED' || fourQuestions.q2?.status === 'LAND') ? 'done' : ((fourQuestions.q2?.status === 'UNKNOWN/REVIEW' || fourQuestions.q2?.status === 'UNKNOWN') ? 'review' : 'fail')}`}>
+                      {(fourQuestions.q2?.status === 'LAND_RELATED' || fourQuestions.q2?.status === 'LAND') ? '✓ LAND_RELATED (ACCEPTED)' : ((fourQuestions.q2?.status === 'UNKNOWN/REVIEW' || fourQuestions.q2?.status === 'UNKNOWN') ? '⚠️ UNKNOWN/REVIEW (AMIN QUEUE)' : '🛑 NON_LAND (REJECTED)')}
                     </span>
                   </div>
                   <h4 className="q-title">Q2. Kya document land-related hai?</h4>
                   <p className="q-desc">{fourQuestions.q2?.details || fourQuestions.q2?.reason || 'Cadastral land indicators classified.'}</p>
                   <div className="q-meta">
                     <span>Classifier Output:</span>
-                    <b>{fourQuestions.q2?.status || 'LAND'} (No FAKE labels)</b>
+                    <b>{fourQuestions.q2?.status || 'LAND_RELATED'} (Zero FAKE labels)</b>
                   </div>
                 </div>
 

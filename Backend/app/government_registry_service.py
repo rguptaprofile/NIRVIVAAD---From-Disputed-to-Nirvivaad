@@ -171,40 +171,22 @@ def fetch_official_government_record(
     Queries authentic on-record Government Land Registry for the specified plot.
     Guarantees zero pseudo-data:
     1. Checks MongoDB official_land_records collection for cached/registered government records.
-    2. Uses state-specific land records schemas (Jamabandi Panji-II, Khatauni, 7/12, RTC).
-    3. Seamlessly aligns genuine owner title chains and official surveyed acreage.
-    4. Supports deliberate fraud/dispute testing modes ('dispute', 'double_selling').
+    2. Checks verified seed database records for official ground truth.
+    3. If not found in digitized records, returns UNVERIFIED status (NEVER synthesizes fake father/owner data).
+    4. Enforces Golden Axiom: NOT VERIFIED != NOT LAND | NOT VERIFIED != FAKE.
     """
     database = db() if callable(db) else db
     state_clean = (state or 'Bihar').strip()
     dist_clean = (district or 'Patna').strip()
     circle_clean = (circle or 'Patna Sadar').strip()
     village_clean = (village or 'Jhauganj').strip()
-    khata_clean = str(khata_no or '47').strip()
-    khasra_clean = str(khasra_no or '214/2').strip()
+    khata_clean = str(khata_no or '').strip()
+    khasra_clean = str(khasra_no or '').strip()
 
     portal_info = get_portal_for_state(state_clean)
 
-    # Check for offline / non-digitized historical parcels
-    if mode == 'unverified' or 'गैर-डिजिटाइज़्ड' in village_clean or 'non-digitized' in village_clean.lower() or khata_clean in ['9999', '99999']:
-        return {
-            'not_found': True,
-            'is_unverified': True,
-            'state': state_clean,
-            'district': dist_clean,
-            'tehsil_circle': circle_clean,
-            'village_mauza': village_clean,
-            'khata_no': khata_clean,
-            'khasra_no': khasra_clean,
-            'official_owner': None,
-            'dispute_status': 'Clear Title (Offline Panji-II verification required)',
-            'court_cases': [],
-            'portal_metadata': portal_info,
-            'message': 'Record not found in online digitized registry — requires historical Panji-II manual lookup.'
-        }
-
     # 1. Check if an official pre-synchronized record exists in MongoDB collection
-    if database is not None:
+    if database is not None and khata_clean and khasra_clean:
         try:
             cached = database.official_land_records.find_one({
                 'state': {'$regex': f'^{re.escape(state_clean)}$', '$options': 'i'},
@@ -214,149 +196,74 @@ def fetch_official_government_record(
             })
             if cached and not mode in ['dispute', 'double_selling']:
                 cached.pop('_id', None)
+                cached['ground_truth_found'] = True
+                cached['not_found'] = False
                 return cached
         except Exception as e:
             logger.warning(f"Error querying official_land_records cache: {e}")
 
-    # 2. Derive GIS Cadastral parcel with boundary polygon & Bhu-Aadhaar 14-digit ULPIN
-    gis_parcel = get_gis_cadastral_parcel(
-        state_clean, dist_clean, circle_clean, village_clean,
-        khata_clean, khasra_clean, api_key=api_key
-    )
-    ulpin = gis_parcel.get('ulpin')
-
-    # 3. Build authentic, deterministic state land record attributes
-    seed_str = f"{state_clean}:{dist_clean}:{circle_clean}:{village_clean}:{khata_clean}:{khasra_clean}"
-    h = _deterministic_hash(seed_str)
-
-    # Determine area
-    if claimed_area and str(claimed_area).strip():
-        # Genuine on-record area matches claimed deed area or has minor exact survey margin
+    # 2. Check fallback in authentic seed data (e.g. Muzaffarpur, Aurangabad, Patna parcels)
+    if khata_clean and khasra_clean:
         try:
-            area_num = float(str(claimed_area).replace('ac', '').replace('acre', '').strip())
-            official_area = f"{area_num:.2f}"
-        except ValueError:
-            official_area = str(claimed_area).strip()
-    else:
-        official_area = f"{round((h % 180) / 100.0 + 0.45, 2)}"
+            from .seed_data import OFFICIAL_LAND_RECORDS
+            for rec in OFFICIAL_LAND_RECORDS:
+                if (rec.get('state', '').lower() == state_clean.lower() and
+                    rec.get('district', '').lower() == dist_clean.lower() and
+                    str(rec.get('khata_no', '')).strip() == khata_clean and
+                    str(rec.get('khasra_no', '')).strip() == khasra_clean):
+                    
+                    is_dispute = mode == 'dispute' or rec.get('is_disputed', False)
+                    return {
+                        'state': rec.get('state', state_clean),
+                        'district': rec.get('district', dist_clean),
+                        'tehsil_circle': rec.get('circle', circle_clean),
+                        'village_mauza': rec.get('village', village_clean),
+                        'khata_no': rec.get('khata_no', khata_clean),
+                        'khasra_no': rec.get('khasra_no', khasra_clean),
+                        'official_owner': rec.get('raiyat_name', ''),
+                        'official_area_acres': rec.get('area_acres', ''),
+                        'official_classification': rec.get('land_type', 'Agricultural'),
+                        'jamabandi_no': rec.get('jamabandi_no', f"JB-{khata_clean}-{khasra_clean.replace('/', '')}"),
+                        'mutation_case_no': rec.get('mutation_case_no', ''),
+                        'registered_deed_no': rec.get('deed_number', ''),
+                        'dispute_status': rec.get('dispute_status', 'Clear (Nirvivaad)'),
+                        'court_cases': rec.get('court_cases', []),
+                        'authorized_poa_holder': rec.get('poa_status', 'Direct Raiyat Ownership (No Intermediary PoA)'),
+                        'last_revenue_receipt': {
+                            'receipt_no': f"BR-REC-{dist_clean[:3].upper()}-{khata_clean}-{khasra_clean.replace('/', '')}",
+                            'financial_year': "2024-2025",
+                            'status': "Paid & Valid (अद्यतन लगान चुकता)",
+                            'online_portal': portal_info['portal_name']
+                        },
+                        'official_registration': {
+                            'status': "Officially Registered (विधिवत निबंधित)",
+                            'registered_deed_no': rec.get('deed_number', ''),
+                            'jamabandi_status': f"Active in Jamabandi Panji-II ({rec.get('jamabandi_no', '')})"
+                        },
+                        'bhu_aadhaar_ulpin': rec.get('ulpin', ''),
+                        'portal_metadata': portal_info,
+                        'ground_truth_found': True,
+                        'not_found': False
+                    }
+        except Exception as ex:
+            logger.warning(f"Error querying fallback seed data: {ex}")
 
-    # Determine owner lineage
-    if claimed_owner and claimed_owner.strip():
-        c_clean = claimed_owner.strip()
-        # Legitimate title chain format in Indian revenue records:
-        # e.g. "Rajkumar Prasad s/o Late Brijmohan Prasad"
-        father_options = ["Brijmohan", "Sitaram", "Ramchandra", "Shivcharan", "Mahadev", "Deonandan", "Nathuni", "Jagdish"]
-        father_name = father_options[h % len(father_options)] + " " + c_clean.split()[-1]
-        official_owner = f"{c_clean} s/o Late {father_name}"
-    else:
-        first_names = ["Rameshwar", "Rajkumar", "Manoj", "Suresh", "Surendra", "Harishchandra", "Gopal"]
-        last_names = ["Prasad", "Sah", "Singh", "Yadav", "Verma", "Patil", "Sharma"]
-        c_first = first_names[h % len(first_names)]
-        c_last = last_names[(h // 7) % len(last_names)]
-        official_owner = f"{c_first} {c_last} s/o Late Ramavatar {c_last}"
-
-    # State-Specific Revenue Identifiers
-    vol_no = (h % 30) + 1
-    page_no = (h % 850) + 50
-    jamabandi_no = f"JB-{khata_clean}-{khasra_clean.replace('/', '')}"
-    mutation_case_no = f"MUT/{dist_clean[:3].upper()}/{2018 + (h % 5)}/{khata_clean}{page_no}"
-    deed_no = f"REG/{dist_clean[:3].upper()}/{khata_clean}/{khasra_clean.replace('/', '-')}/{2015 + (h % 8)}"
-
-    # Dispute & encumbrance simulation logic
-    is_dispute_plot = mode == 'dispute' or khasra_clean in ['88/1', '19/3', '305/A']
-    is_double_selling_plot = mode == 'double_selling' or khasra_clean in ['88/1', '214/B']
-
-    if is_dispute_plot:
-        dispute_status = "High (Vivaadit Jamin / Active Court Injunction)"
-        court_cases = [
-            f"TS-{khasra_clean.replace('/', '')}/2022 (Civil Court Sub-Judge, {dist_clean})",
-            f"Section 144 CrPC Prohibitory Order (SDM Office, {circle_clean})"
-        ]
-        encumbrance_status = f"Sub-Judice / Active Stay Order under Title Suit TS-{khasra_clean.replace('/', '')}/2022"
-    elif is_double_selling_plot:
-        dispute_status = "High (Double Selling / Conflicting Conveyances Registered)"
-        court_cases = [
-            f"Prior Registered Conveyance Deed #{1000 + (h % 8000)}/2021 to Third Party without Mutation"
-        ]
-        encumbrance_status = "Encumbered (Multiple Registered Conveyances Flagged)"
-    else:
-        dispute_status = "Clear (Nirvivaad)"
-        court_cases = []
-        encumbrance_status = "Clear Title (No Bank Mortgage, No Injunction)"
-
-    # Chauhaddi (Cadastral neighbors)
-    chauhaddi = {
-        'north': f"Plot {int(khata_clean) + 1} (Raiyati Boundary)",
-        'south': "Sarkari Gramin Sadak (Government Road 20 ft)",
-        'east': f"Survey Plot {khasra_clean}-E",
-        'west': "Nahar / Irrigation Water Channel"
-    }
-
-    record = {
+    # 3. Not found in online digitized database:
+    # Axiom: NOT VERIFIED != NOT LAND | NOT VERIFIED != FAKE
+    # Do NOT fabricate synthetic owner, father, or deed numbers.
+    return {
+        'not_found': True,
+        'ground_truth_found': False,
+        'status': 'UNVERIFIED',
         'state': state_clean,
         'district': dist_clean,
         'tehsil_circle': circle_clean,
         'village_mauza': village_clean,
         'khata_no': khata_clean,
         'khasra_no': khasra_clean,
-        'jamabandi_no': jamabandi_no,
-        'volume_no': str(vol_no),
-        'page_no': str(page_no),
-        'mutation_case_no': mutation_case_no,
-        'registered_deed_no': deed_no,
-        'official_owner': official_owner,
-        'official_area_acres': official_area,
-        'official_classification': 'Agricultural — irrigated',
-        'chauhaddi': chauhaddi,
-        'lagaan_cess': f"₹ {round(35.0 + (h % 60), 2)} / year (Paid up-to-date)",
-        'last_revenue_receipt': {
-            'receipt_no': f"BR-REC-{dist_clean[:3].upper()}-{khata_clean}-{khasra_clean.replace('/', '')}",
-            'financial_year': "2024-2025",
-            'payment_date': f"{10 + (h % 18):02d}-{(h % 12) + 1:02d}-2024",
-            'cess_amount': f"₹ {round(35.0 + (h % 60), 2)} / year",
-            'status': "Paid & Valid (अद्यतन लगान चुकता)",
-            'online_portal': portal_info['portal_name']
-        },
-        'official_registration': {
-            'status': "Officially Registered (विधिवत निबंधित)",
-            'registered_deed_no': deed_no,
-            'registration_date': f"2018-{(h % 12) + 1:02d}-{(h % 28) + 1:02d}",
-            'sub_registrar_office': f"{dist_clean} Sub-Registry Office (उप-निबंधक कार्यालय)",
-            'jamabandi_status': f"Active in Jamabandi Panji-II ({jamabandi_no})",
-            'mutation_case_no': mutation_case_no
-        },
-        'authorized_poa_holder': 'None (Direct Raiyat Ownership)',
-        'poa_classification': {
-            'authority_type': "Direct Raiyat Ownership (प्रत्यक्ष रैयत स्वामित्व)",
-            'authorized_poa_holder': "None (Direct Raiyat Ownership)",
-            'sub_registrar_status': "No Intermediary Agent Registered"
-        },
-        'encumbrance_status': encumbrance_status,
-        'dispute_status': dispute_status,
-        'court_cases': court_cases,
-        'bhu_aadhaar_ulpin': ulpin,
-        'gis_centroid': gis_parcel.get('centroid'),
-        'boundary_geojson': gis_parcel.get('boundary_geojson'),
-        'corner_pins': gis_parcel.get('corner_pins'),
+        'official_owner': None,
+        'dispute_status': 'Clear (Historical non-digitized ledger check recommended)',
+        'court_cases': [],
         'portal_metadata': portal_info,
-        'verified_at': now().isoformat(),
-        'source_authority': f"{portal_info['department']} via DILRMP National Cadastral Gateway"
+        'message': f"Plot (Khata {khata_clean or 'N/A'}, Khasra {khasra_clean or 'N/A'}) was not found in the online digitized registry. Physical Panji-II verification recommended."
     }
-
-    # Store into MongoDB official_land_records for permanent caching if database available
-    if database is not None and not is_dispute_plot and not is_double_selling_plot:
-        try:
-            database.official_land_records.update_one(
-                {
-                    'state': state_clean,
-                    'district': dist_clean,
-                    'khata_no': khata_clean,
-                    'khasra_no': khasra_clean
-                },
-                {'$set': record},
-                upsert=True
-            )
-        except Exception as ex:
-            logger.warning(f"Could not cache official land record: {ex}")
-
-    return record

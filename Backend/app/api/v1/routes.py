@@ -305,7 +305,7 @@ async def upload(
                 detail=extracted.get('error', 'Upload rejected: Invalid document. Please upload valid land-related documents only (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney, Dakhil Kharij).')
             )
         merged_meta = {**extracted, **user_meta}
-        is_unknown = (class_state == 'UNKNOWN')
+        is_unknown = (class_state in ['UNKNOWN', 'UNKNOWN/REVIEW'])
 
         doc = {
             'document_id': did,

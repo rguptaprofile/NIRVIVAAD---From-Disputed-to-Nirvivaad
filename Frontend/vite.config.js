@@ -8,7 +8,7 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com',
+        target: process.env.VITE_BACKEND_URL || 'https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com',
         changeOrigin: true,
         secure: false
       }

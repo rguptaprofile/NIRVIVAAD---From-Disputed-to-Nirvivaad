@@ -13,6 +13,12 @@ logger = logging.getLogger(__name__)
 # Allowed Land Record Document Extensions
 ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp', '.txt'}
 
+# Official Classifier Standard Labels: 0 = NON_LAND, 1 = LAND_RELATED
+CLASSIFIER_LABELS = {
+    0: 'NON_LAND',
+    1: 'LAND_RELATED'
+}
+
 # Programming Languages & Script Disqualifiers (Python, JS, C, Shell, etc.)
 PROGRAMMING_CODE_SIGNATURES = [
     r'\bdef\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(',
@@ -231,12 +237,12 @@ def check_file_readability(file_path: str, content_bytes: bytes = None, raw_text
 def check_is_land_document(raw_text: str, filename: str = "", user_hints: dict = None) -> tuple[str, float, str, str]:
     """
     Q2: Kya document land-related hai?
-    Strictly Content-Driven 3-State Classifier:
-      - 'LAND': Cadastral relevance score >= 0.80. Genuine land record.
-      - 'NON_LAND': Cadastral relevance score <= 0.20. Explicit non-land or identity doc.
-      - 'UNKNOWN': Ambiguous, low-contrast historical scan, or score between 0.20 and 0.80.
-                   Routes to Human-Assisted Amin Verification Workflow (NOT REJECTED).
-    Zero 'FAKE' labels in classifier. Zero filename-based classification shortcuts.
+    Content-Driven 3-State Classifier:
+      - 'LAND_RELATED': Cadastral relevance score >= 0.80. Genuine land record.
+      - 'NON_LAND': Definite non-land document (Identity, Medical, Commercial, Code, or relevance score <= 0.20).
+      - 'UNKNOWN/REVIEW': Ambiguous, low-contrast historical scan, or OCR minimal text.
+                          Accepted for Human-Assisted Amin Verification Workflow (ACCEPTED, NOT REJECTED).
+    Zero 'FAKE' strings in classifier output. Zero filename shortcuts.
     Returns: (classification_state: str, confidence: float, category: str, message: str)
     """
     user_hints = user_hints or {}
@@ -246,17 +252,18 @@ def check_is_land_document(raw_text: str, filename: str = "", user_hints: dict =
     if ext and ext not in ALLOWED_EXTENSIONS:
         return 'NON_LAND', 0.0, "invalid_extension", (
             f"Upload rejected: Invalid file format ('{ext}'). NIRVIVAAD accepts land records in PDF or scanned image format "
-            f"(JPG, PNG, TIFF, BMP) only. Files like '{filename}' cannot be processed as land records."
+            f"(JPG, PNG, TIFF, BMP) only."
         )
 
     clean_text = (raw_text or '').strip()
     text_lower = clean_text.lower()
 
-    # 2. Golden Rule: OCR failure must NEVER be classified as NON_LAND!
+    # 2. Scanned PDF / Faint Historical Scan Handling (OCR Fallback)
+    # A faint or degraded scan must NEVER be rejected as NON_LAND!
     if len(clean_text) < 15:
-        return 'UNKNOWN', 0.50, "faint_historical_scan", (
+        return 'UNKNOWN/REVIEW', 0.50, "faint_historical_scan", (
             "⚠️ Unable to autonomously confirm all cadastral text fields due to low-contrast or historical script. "
-            "Document marked as 'UNKNOWN' and queued for Human-Assisted Amin Verification Workflow (NOT rejected)."
+            "Document marked as 'UNKNOWN/REVIEW' and accepted for Human-Assisted Amin Verification Workflow (NOT rejected)."
         )
 
     # 3. Negative Signals Evaluation (Identity, Medical, Commercial, Code)
@@ -268,10 +275,10 @@ def check_is_land_document(raw_text: str, filename: str = "", user_hints: dict =
             neg_signals_matched.append(('source_code_script', "Programming source code / script detected."))
             break
 
-    # 3.2 Identity Documents (Aadhaar, Passport, PAN, Voter ID, Driving License)
+    # 3.2 Personal Identity Documents (Aadhaar, Passport, PAN, Voter ID, Driving License)
     for pat in IDENTITY_DOCUMENT_SIGNATURES:
         if re.search(pat, text_lower):
-            neg_signals_matched.append(('identity_document', "Personal Identity Document (Aadhaar / PAN / Passport / Voter ID) detected."))
+            neg_signals_matched.append(('identity_document', "Personal Identity Document (Aadhaar / PAN / Passport / Voter ID / DL) detected."))
             break
 
     # 3.3 Medical, Clinical & Pathology
@@ -283,37 +290,46 @@ def check_is_land_document(raw_text: str, filename: str = "", user_hints: dict =
     # 3.4 Commercial Invoices, Utility Bills, Resumes, Marksheets
     for pat in COMMERCIAL_NON_LAND_SIGNATURES:
         if re.search(pat, text_lower):
-            neg_signals_matched.append(('non_land_commercial', "Commercial invoice, bill, resume, or marksheet detected."))
+            neg_signals_matched.append(('non_land_commercial', "Commercial invoice, utility bill, resume, or marksheet detected."))
             break
 
-    # 4. Positive Cadastral Land Signals Evaluation
+    # 4. Immediate Disqualification for Identity, Medical, Code
+    # An ID document or medical report is NEVER a land record even if address words match!
+    if any(cat in ['identity_document', 'medical_report', 'source_code_script'] for cat, _ in neg_signals_matched):
+        cat, reason = next((c, r) for c, r in neg_signals_matched if c in ['identity_document', 'medical_report', 'source_code_script'])
+        return 'NON_LAND', 0.0, cat, f"Upload rejected: {reason} Personal identity, medical, or script files cannot be accepted as land title documents."
+
+    # 5. Positive Cadastral Land Signals Evaluation
     pos_matches = 0
     for pat in LAND_CADASTRAL_SIGNATURES:
         if re.search(pat, text_lower):
             pos_matches += 1
 
-    # 5. Dual-Signal Scoring & Threshold Calibration
-    # 0 = NON_LAND, 1 = LAND. Calibrated: >=0.80 LAND, <=0.20 NON_LAND, 0.20-0.80 UNKNOWN.
+    # 6. Commercial bills / invoices with no cadastral matches
     if neg_signals_matched and pos_matches == 0:
         cat, reason = neg_signals_matched[0]
         return 'NON_LAND', 0.0, cat, f"Upload rejected: {reason} Please upload valid land-related documents only (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney, Dakhil Kharij)."
 
+    # 7. Dual-Signal Scoring & Threshold Calibration
     pos_score = min(1.0, pos_matches * 0.25)
     neg_penalty = min(1.0, len(neg_signals_matched) * 0.50)
     relevance_score = max(0.0, min(1.0, pos_score - neg_penalty))
 
     if relevance_score >= 0.80 or (pos_matches >= 2 and not neg_signals_matched):
         conf = min(0.99, max(0.85, 0.82 + (pos_matches * 0.03)))
-        return 'LAND', conf, "land_record", "High-confidence official land document detected."
+        return 'LAND_RELATED', conf, "land_record", "High-confidence official land document detected."
+
+    if pos_matches >= 1 and not neg_signals_matched:
+        return 'LAND_RELATED', 0.85, "land_record", "Land record indicators detected with moderate confidence."
 
     if relevance_score <= 0.20 and neg_signals_matched:
         cat, reason = neg_signals_matched[0]
         return 'NON_LAND', 0.0, cat, f"Upload rejected: {reason} Please upload valid land-related documents only."
 
     # Ambiguous / Low-contrast historical scan (0.20 - 0.80) -> Route to Human Review, NEVER reject!
-    return 'UNKNOWN', 0.65, "faint_historical_scan", (
+    return 'UNKNOWN/REVIEW', 0.65, "faint_historical_scan", (
         "⚠️ Unable to autonomously confirm all cadastral text fields due to low-contrast or historical script. "
-        "Document marked as 'UNKNOWN' and queued for Human-Assisted Amin Verification Workflow (NOT rejected)."
+        "Document marked as 'UNKNOWN/REVIEW' and queued for Human-Assisted Amin Verification Workflow (NOT rejected)."
     )
 
 
@@ -408,7 +424,7 @@ def extract_cadastral_intelligence(file_path: str, filename: str, content_bytes:
         'status': state_classification,
         'confidence': class_confidence,
         'category': doc_category,
-        'is_land_document': (state_classification in ['LAND', 'UNKNOWN']),
+        'is_land_document': (state_classification in ['LAND', 'LAND_RELATED', 'UNKNOWN', 'UNKNOWN/REVIEW']),
         'rejection_reason': rejection_reason if state_classification == 'NON_LAND' else None,
         'details': rejection_reason
     }
@@ -579,19 +595,7 @@ def extract_cadastral_intelligence(file_path: str, filename: str, content_bytes:
             khasra_confidence = 0.98
 
 
-    needs_review = (state_classification == 'UNKNOWN')
-    if not detected_khata and not detected_khasra:
-        needs_review = True
-        nums = re.findall(r'\b([0-9]{1,4}(?:/[0-9]{1,2})?)\b', corpus)
-        nums = [n for n in nums if n not in ['2024', '2025', '2026', '2023', '2022', '1950', '1908']]
-        if nums:
-            detected_khasra = nums[0]
-            khasra_evidence = f"Extracted isolated numeric token: {nums[0]}"
-            khasra_confidence = 0.72
-            if len(nums) > 1:
-                detected_khata = nums[1]
-                khata_evidence = f"Extracted secondary numeric token: {nums[1]}"
-                khata_confidence = 0.70
+    needs_review = (state_classification in ['UNKNOWN', 'UNKNOWN/REVIEW'])
 
     # 9. Raiyat / Claimed Owner Name Detection
     detected_owner = user_hints.get('claimed_owner', '')
@@ -660,7 +664,7 @@ def extract_cadastral_intelligence(file_path: str, filename: str, content_bytes:
         'receipt_number': receipt_num_match.group(1).strip() if receipt_num_match else (detected_deed or 'REC-Recent'),
         'financial_year': fin_year_match.group(1).strip() if fin_year_match else '2024-2025',
         'issuing_circle': detected_circle or 'Sadar Anchal Office',
-        'amount_paid_inr': '120.00',
+        'amount_paid_inr': None,
         'status': 'Verified Paid (अद्यतन लगान चुकता)'
     }
 
@@ -668,7 +672,7 @@ def extract_cadastral_intelligence(file_path: str, filename: str, content_bytes:
     reg_status_match = bool(re.search(r'(?:निबंधित|registered|पंजीकृत|निबंधन)', corpus, re.IGNORECASE))
     official_registration_info = {
         'status': 'Officially Registered (विधिवत निबंधित)' if (reg_status_match or detected_deed or classified_type == 'kewala_registry') else 'Recorded Title (RoR Ledger)',
-        'deed_number': detected_deed or ('REG-' + (detected_khasra.replace('/', '-') if detected_khasra else 'DEED')),
+        'deed_number': detected_deed or None,
         'sub_registrar_office': f"{detected_district or 'District'} Sub-Registry Office (उप-निबंधक कार्यालय)",
         'jamabandi_status': f"Active in Jamabandi Panji-II (जमाबंदी कायम)" if detected_khata else 'Recorded in Revenue Ledger',
         'mutation_status': 'Mutation Approved & Shudhipatra Issued' if classified_type == 'dakhil_kharij' else 'Mutated Succession'
@@ -915,7 +919,7 @@ def extract_cadastral_intelligence(file_path: str, filename: str, content_bytes:
         'sha256_hash': sha256_hash,
         'sih_compliance': sih_compliance,
         'tech_stack_metadata': tech_stack_metadata,
-        'needs_manual_review': needs_review or (state_classification == 'UNKNOWN'),
+        'needs_manual_review': needs_review or (state_classification in ['UNKNOWN', 'UNKNOWN/REVIEW']),
         'ai_confidence': overall_confidence,
         'extraction_engine': 'nirvivaad-ai-cadastral-ocr-v4 (Indic-NLP + Detectron2 + OpenCV)',
         'timestamp': datetime.now(timezone.utc).isoformat()
