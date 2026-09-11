@@ -440,6 +440,13 @@ async def analyze_document_preview(
         return {
             'success': True,
             'filename': file.filename,
+            'golden_axiom': "NOT VERIFIED ≠ NOT LAND | NOT VERIFIED ≠ FAKE",
+            'q1_readability': extracted.get('q1_readability', {}),
+            'q2_land_relevance': extracted.get('q2_land_relevance', {}),
+            'q3_extraction': extracted.get('q3_extraction', {}),
+            'q4_verification': eval_report.get('q4_verification', {}),
+            'upload_status': extracted.get('upload_status', 'ACCEPTED'),
+            'verification_status': eval_report.get('q4_verification', {}).get('status', 'VERIFIED'),
             'extracted': extracted,
             'ground_truth': gt,
             'verification_flow': verification_flow,

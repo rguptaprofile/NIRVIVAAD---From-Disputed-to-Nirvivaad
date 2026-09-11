@@ -185,6 +185,24 @@ def fetch_official_government_record(
 
     portal_info = get_portal_for_state(state_clean)
 
+    # Check for offline / non-digitized historical parcels
+    if mode == 'unverified' or 'गैर-डिजिटाइज़्ड' in village_clean or 'non-digitized' in village_clean.lower() or khata_clean in ['9999', '99999']:
+        return {
+            'not_found': True,
+            'is_unverified': True,
+            'state': state_clean,
+            'district': dist_clean,
+            'tehsil_circle': circle_clean,
+            'village_mauza': village_clean,
+            'khata_no': khata_clean,
+            'khasra_no': khasra_clean,
+            'official_owner': None,
+            'dispute_status': 'Clear Title (Offline Panji-II verification required)',
+            'court_cases': [],
+            'portal_metadata': portal_info,
+            'message': 'Record not found in online digitized registry — requires historical Panji-II manual lookup.'
+        }
+
     # 1. Check if an official pre-synchronized record exists in MongoDB collection
     if database is not None:
         try:

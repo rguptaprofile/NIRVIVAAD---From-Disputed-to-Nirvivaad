@@ -1738,6 +1738,7 @@ function Upload({ refresh, user }) {
   const [showFineTune, setShowFineTune] = useState(false);
   const [groundTruthPreview, setGroundTruthPreview] = useState(null);
   const [verificationFlowData, setVerificationFlowData] = useState(null);
+  const [fourQuestions, setFourQuestions] = useState(null);
   const [gisData, setGisData] = useState(null);
   const [showGisViewer, setShowGisViewer] = useState(false);
   const [gisApiKey, setGisApiKey] = useState('');
@@ -1837,6 +1838,7 @@ function Upload({ refresh, user }) {
       setAiExtracted(null);
       setPreviewValidationReport(null);
       setVerificationFlowData(null);
+      setFourQuestions(null);
       return;
     }
     const primary = chosen[0];
@@ -1847,6 +1849,15 @@ function Upload({ refresh, user }) {
         setAiExtracted(res.extracted);
         if (res.verification_flow) setVerificationFlowData(res.verification_flow);
         if (res.validation_report) setPreviewValidationReport(res.validation_report);
+        setFourQuestions({
+          q1: res.q1_readability || res.extracted?.q1_readability,
+          q2: res.q2_land_relevance || res.extracted?.q2_land_relevance,
+          q3: res.q3_extraction || res.extracted?.q3_extraction,
+          q4: res.q4_verification || res.validation_report?.q4_verification,
+          golden_axiom: res.golden_axiom || "NOT VERIFIED ≠ NOT LAND | NOT VERIFIED ≠ FAKE",
+          upload_status: res.upload_status || 'ACCEPTED',
+          verification_status: res.verification_status || res.validation_report?.q4_verification?.status || 'VERIFIED'
+        });
         const ext = res.extracted;
         if (ext.document_type) setDocType(ext.document_type);
         if (ext.state) setSelectedState(ext.state);
@@ -1877,6 +1888,7 @@ function Upload({ refresh, user }) {
         setAiExtracted(null);
         setPreviewValidationReport(null);
         setVerificationFlowData(null);
+        setFourQuestions(null);
       } else {
         setM(errMsg);
       }
@@ -2216,6 +2228,92 @@ function Upload({ refresh, user }) {
               </div>
             )}
           </div>
+
+          {/* 4-Question Cadastral Trust Console & Golden Axiom Banner */}
+          {fourQuestions && (
+            <div className="four-questions-container">
+              <div className="axiom-banner">
+                <div className="axiom-icon">⚖️</div>
+                <div className="axiom-content">
+                  <div className="axiom-title">CADASTRAL TRUST ARCHITECTURE: GOLDEN AXIOM</div>
+                  <div className="axiom-statement">
+                    <strong>NOT VERIFIED ≠ NOT LAND</strong> &nbsp;|&nbsp; <strong>NOT VERIFIED ≠ FAKE</strong>
+                  </div>
+                  <p className="axiom-note">
+                    <strong>Q2 ka answer Q4 nahi hai.</strong> Land document classification (Q2) evaluates genuine deed formats (Khatihan, Kewala, Rasid, Mutation, PoA).
+                    Government verification (Q4) verifies online record concordance. An offline or un-digitized land record is strictly:
+                    <span className="axiom-tag">LAND_RELATED = YES</span> &nbsp;·&nbsp; <span className="axiom-tag">GOVERNMENT_VERIFIED = UNVERIFIED</span>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="four-questions-grid">
+                {/* Q1: Kya file readable hai? */}
+                <div className={`q-step-card ${fourQuestions.q1?.status === 'PASS' ? 'pass' : 'alert'}`}>
+                  <div className="q-step-header">
+                    <span className="q-badge">QUESTION 1</span>
+                    <span className={`q-status-pill ${fourQuestions.q1?.status === 'PASS' ? 'done' : 'review'}`}>
+                      {fourQuestions.q1?.status === 'PASS' ? '✓ READABLE' : (fourQuestions.q1?.status || 'CHECKED')}
+                    </span>
+                  </div>
+                  <h4 className="q-title">Q1. Kya file readable hai?</h4>
+                  <p className="q-desc">{fourQuestions.q1?.message || 'File scanned & verified for OCR readability.'}</p>
+                  <div className="q-meta">
+                    <span>OCR Extracted:</span>
+                    <b>{fourQuestions.q1?.char_count || 0} characters</b>
+                  </div>
+                </div>
+
+                {/* Q2: Kya document land-related hai? */}
+                <div className={`q-step-card ${fourQuestions.q2?.status === 'LAND' ? 'pass' : (fourQuestions.q2?.status === 'UNKNOWN' ? 'warn' : 'fail')}`}>
+                  <div className="q-step-header">
+                    <span className="q-badge">QUESTION 2</span>
+                    <span className={`q-status-pill ${fourQuestions.q2?.status === 'LAND' ? 'done' : (fourQuestions.q2?.status === 'UNKNOWN' ? 'review' : 'fail')}`}>
+                      {fourQuestions.q2?.status === 'LAND' ? '✓ LAND RECORD' : (fourQuestions.q2?.status === 'UNKNOWN' ? '⚠️ UNKNOWN (REVIEW)' : '🛑 NON-LAND')}
+                    </span>
+                  </div>
+                  <h4 className="q-title">Q2. Kya document land-related hai?</h4>
+                  <p className="q-desc">{fourQuestions.q2?.details || fourQuestions.q2?.reason || 'Cadastral land indicators classified.'}</p>
+                  <div className="q-meta">
+                    <span>Classifier Output:</span>
+                    <b>{fourQuestions.q2?.status || 'LAND'} (No FAKE labels)</b>
+                  </div>
+                </div>
+
+                {/* Q3: Document ke andar actual data kya likha hai? */}
+                <div className="q-step-card pass">
+                  <div className="q-step-header">
+                    <span className="q-badge">QUESTION 3</span>
+                    <span className="q-status-pill done">✓ EVIDENCE-FIRST</span>
+                  </div>
+                  <h4 className="q-title">Q3. Document ke andar actual data kya likha hai?</h4>
+                  <p className="q-desc">Field-level extraction with provenance &amp; zero hallucination.</p>
+                  <div className="q-specs-mini">
+                    <div><span>Khata:</span> <b>{fourQuestions.q3?.khata_no || typedMeta.khata_no || '—'}</b></div>
+                    <div><span>Khasra:</span> <b>{fourQuestions.q3?.khasra_no || typedMeta.khasra_no || '—'}</b></div>
+                    <div><span>Raiyat:</span> <b>{fourQuestions.q3?.claimed_owner || typedMeta.claimed_owner || '—'}</b></div>
+                    <div><span>Area:</span> <b>{fourQuestions.q3?.area || typedMeta.area || '—'} Acre</b></div>
+                  </div>
+                </div>
+
+                {/* Q4: Kya extracted data authoritative government record se match karta hai? */}
+                <div className={`q-step-card ${fourQuestions.q4?.status === 'VERIFIED' ? 'pass' : (fourQuestions.q4?.status === 'UNVERIFIED' ? 'unverified' : 'warn')}`}>
+                  <div className="q-step-header">
+                    <span className="q-badge">QUESTION 4</span>
+                    <span className={`q-status-pill ${fourQuestions.q4?.status === 'VERIFIED' ? 'done' : (fourQuestions.q4?.status === 'UNVERIFIED' ? 'offline' : 'review')}`}>
+                      {fourQuestions.q4?.status === 'VERIFIED' ? '✓ VERIFIED' : (fourQuestions.q4?.status === 'UNVERIFIED' ? 'ℹ️ UNVERIFIED (OFFLINE)' : '⚠️ ' + (fourQuestions.q4?.status || 'REVIEW'))}
+                    </span>
+                  </div>
+                  <h4 className="q-title">Q4. Kya data authoritative record se match karta hai?</h4>
+                  <p className="q-desc">{fourQuestions.q4?.details || fourQuestions.q4?.message || 'Concordance verified against BiharBhumi / DILRMP database.'}</p>
+                  <div className="q-meta">
+                    <span>Registry Status:</span>
+                    <b>{fourQuestions.q4?.status || 'PENDING'}</b>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* SIH 2026 Navigation Tabs */}
           <div className="sih-tab-bar">
