@@ -6,7 +6,7 @@ function getCandidateBases() {
   if (envBase) return [envBase.replace(/\/$/, '')];
 
   if (typeof window === 'undefined') {
-    return ['http://127.0.0.1:8000/api/v1'];
+    return ['https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/v1'];
   }
 
   const hostname = window.location.hostname;
@@ -131,7 +131,7 @@ async function request(path, options = {}) {
   }
 
   // If all candidate endpoints were unreachable:
-  const helpfulMsg = 'API server is unreachable. Please verify backend is running on http://127.0.0.1:8000 or click Reconnect.';
+  const helpfulMsg = 'API server is unreachable. Please verify backend is running on https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com or click Reconnect.';
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('nirvivaad_backend_unreachable', {
       detail: { message: helpfulMsg, attempted: candidateBases.slice(0, maxAttempts) }
