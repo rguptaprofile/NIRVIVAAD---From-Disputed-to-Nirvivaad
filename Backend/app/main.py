@@ -137,6 +137,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -154,18 +155,41 @@ app.include_router(
 
 
 # --------------------------------------------------
-# ROOT ENDPOINT
+# ROOT & STATIC FRONTEND SERVING
 # --------------------------------------------------
 
-@app.get("/", include_in_schema=False)
-def root():
-    return {
-        "message": "NIRVIVAAD API is running"
-    }
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
+frontend_dist = Path(__file__).resolve().parents[2] / "Frontend" / "dist"
+
+if frontend_dist.exists() and (frontend_dist / "index.html").exists():
+    assets_dir = frontend_dist / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="frontend_assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
+            return {"error": "Endpoint not found"}
+        target_file = frontend_dist / full_path
+        if full_path and target_file.exists() and target_file.is_file():
+            return FileResponse(str(target_file))
+        return FileResponse(str(frontend_dist / "index.html"))
+else:
+    @app.get("/", include_in_schema=False)
+    def root():
+        return {
+            "message": "NIRVIVAAD API is running",
+            "version": "1.0.0",
+            "status": "healthy"
+        }
 
 @app.get("/api/v1", include_in_schema=False)
 def api_root():
     return {
-        "message": "Nirvivaad API is working"
+        "message": "Nirvivaad API is working",
+        "status": "online"
     }
+

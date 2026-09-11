@@ -338,7 +338,42 @@ function Auth({ done, go }) {
                 </>
               )}
 
-              {error && <p className="notice">{error}</p>}
+              {error && (
+                <div className="notice" style={{ background: '#FFF4E5', borderLeft: '4px solid #E65100', padding: '10px 14px', margin: '12px 0', borderRadius: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#BF360C', fontSize: 13 }}>
+                    <span>⚠️</span> {error}
+                  </div>
+                  {(error.includes('unreachable') || error.includes('backend connection')) && (
+                    <div style={{ marginTop: 8, fontSize: 11.5, color: '#4E342E', lineHeight: 1.5 }}>
+                      <div style={{ marginBottom: 6 }}>
+                        Current Target: <code style={{ background: '#FFE0B2', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>{api.getActiveBase()}</code>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ background: '#195B42', color: '#FFF', padding: '4px 10px', fontSize: 11, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                          onClick={async () => {
+                            setError('Testing backend connection…');
+                            const res = await api.checkHealth();
+                            if (res.ok) {
+                              setError('');
+                              alert(`✓ Backend connected successfully at ${res.base}!`);
+                            } else {
+                              setError('Still unreachable. Please ensure the backend is running on port 8000 (run start_all.bat).');
+                            }
+                          }}
+                        >
+                          🔄 Test &amp; Auto-Reconnect
+                        </button>
+                        <span style={{ fontSize: 11, color: '#6D4C41' }}>
+                          Tip: Run <b>start_all.bat</b> in the project root folder.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <button className="auth-action" disabled={busy}>
                 {busy ? 'Verifying with system…' : signup ? `Generate Unique ID & Register` : (role === 'admin' ? `Sign in to Admin Console →` : `Sign in to User Dashboard →`)}
