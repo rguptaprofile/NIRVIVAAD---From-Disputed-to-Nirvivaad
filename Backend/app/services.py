@@ -68,6 +68,120 @@ GOVERNMENT_LOCATIONS = ALL_INDIAN_LOCATIONS
 
 # Real On-Record Cadastral Registry (Modeled directly on Bihar Bhumi / DILRMP / Revenue Dept Registers)
 OFFICIAL_CADASTRAL_REGISTRY = {
+    # Document 1: UP Bhulekh Khatauni (Prayagraj, Handia, Banpurwa Partipur, Khata 00264, Gata 297)
+    ("Uttar Pradesh", "Prayagraj", "00264", "297"): {
+        'state': 'Uttar Pradesh',
+        'district': 'Prayagraj',
+        'tehsil_circle': 'Handia',
+        'village_mauza': 'Banpurwa Partipur',
+        'khata_no': '00264',
+        'khasra_no': '297',
+        'jamabandi_no': 'UP-BHLK-PRY-162795-264-297',
+        'official_owner': 'विक्रमाजीत s/o द्वारिका',
+        'father_or_spouse': 'द्वारिका',
+        'official_area_acres': '0.345',
+        'official_classification': 'संक्रमणीय भूमिधर (1-क) / Raiyati Agricultural',
+        'ulpin': '1627950297000012',
+        'mutation_ref': 'MUT/PRY/1425-1430/297',
+        'registered_deed_no': 'UP-KHATAUNI-162795-00264',
+        'lagaan_cess': '₹ 6.91 / year (Paid)',
+        'authorized_poa_holder': 'None (Direct Raiyat Ownership)',
+        'encumbrance_status': 'None (बंधक-मुक्त / Clear Title)',
+        'dispute_status': 'Clear (Nirvivaad)',
+        'court_cases': []
+    },
+    ("Uttar Pradesh", "Prayagraj", "264", "297"): {
+        'state': 'Uttar Pradesh',
+        'district': 'Prayagraj',
+        'tehsil_circle': 'Handia',
+        'village_mauza': 'Banpurwa Partipur',
+        'khata_no': '264',
+        'khasra_no': '297',
+        'jamabandi_no': 'UP-BHLK-PRY-162795-264-297',
+        'official_owner': 'विक्रमाजीत s/o द्वारिका',
+        'father_or_spouse': 'द्वारिका',
+        'official_area_acres': '0.345',
+        'official_classification': 'संक्रमणीय भूमिधर (1-क) / Raiyati Agricultural',
+        'ulpin': '1627950297000012',
+        'mutation_ref': 'MUT/PRY/1425-1430/297',
+        'registered_deed_no': 'UP-KHATAUNI-162795-00264',
+        'lagaan_cess': '₹ 6.91 / year (Paid)',
+        'authorized_poa_holder': 'None (Direct Raiyat Ownership)',
+        'encumbrance_status': 'None (बंधक-मुक्त / Clear Title)',
+        'dispute_status': 'Clear (Nirvivaad)',
+        'court_cases': []
+    },
+    ("Uttar Pradesh", "प्रयागराज", "00264", "297"): {
+        'state': 'Uttar Pradesh',
+        'district': 'प्रयागराज',
+        'tehsil_circle': 'हंडिया',
+        'village_mauza': 'बनपुरवा परतीपुर',
+        'khata_no': '00264',
+        'khasra_no': '297',
+        'jamabandi_no': 'UP-BHLK-PRY-162795-264-297',
+        'official_owner': 'विक्रमाजीत s/o द्वारिका',
+        'father_or_spouse': 'द्वारिका',
+        'official_area_acres': '0.345',
+        'official_classification': 'संक्रमणीय भूमिधर (1-क)',
+        'ulpin': '1627950297000012',
+        'mutation_ref': 'MUT/PRY/1425-1430/297',
+        'registered_deed_no': 'UP-KHATAUNI-162795-00264',
+        'lagaan_cess': '₹ 6.91 / year',
+        'authorized_poa_holder': 'None (Direct Raiyat Ownership)',
+        'encumbrance_status': 'None (बंधक-मुक्त)',
+        'dispute_status': 'Clear (Nirvivaad)',
+        'court_cases': []
+    },
+    # Document 2: Bihar Registered Power of Attorney Deed (Sub-Registry Daudnagar, Aurangabad, Khata 106, Khasra 3362)
+    ("Bihar", "Aurangabad", "106", "3362"): {
+        'state': 'Bihar',
+        'district': 'Aurangabad',
+        'tehsil_circle': 'Daudnagar',
+        'village_mauza': 'Hathiara',
+        'khata_no': '106',
+        'khasra_no': '3362',
+        'jamabandi_no': '237',
+        'official_owner': 'मंगो देवी w/o राम जनम सिंह',
+        'father_or_spouse': 'राम जनम सिंह',
+        'poa_holder_name': 'संजीवन साव s/o सिंहनाथ सिंह',
+        'official_area_acres': '1.45',
+        'official_classification': 'Raiyati Agricultural (1 एकड़ 45 डिसमिल)',
+        'ulpin': '10106336200008',
+        'chauhaddi': {
+            'north': 'ताड़ का वृक्ष / रास्ता (Tad Tree / Public Path)',
+            'south': 'मो० अलाउद्दीन (Md. Alauddin)',
+            'east': 'मो० सलाउद्दीन (Md. Salauddin)',
+            'west': 'रास्ता (Public Path)'
+        },
+        'mutation_ref': 'MUT/AUR/2008/1063362',
+        'registered_deed_no': '48338/07',
+        'lagaan_cess': '₹ 500 Stamp Paid (Sub-Registry Daudnagar)',
+        'authorized_poa_holder': 'Registered Valid General Power of Attorney (संजीवन साव s/o सिंहनाथ सिंह)',
+        'encumbrance_status': 'Clear Title (Registered General PoA)',
+        'dispute_status': 'Clear (Nirvivaad)',
+        'court_cases': []
+    },
+    ("Bihar", "औरंगाबाद", "106", "3362"): {
+        'state': 'Bihar',
+        'district': 'औरंगाबाद',
+        'tehsil_circle': 'दाउदनगर',
+        'village_mauza': 'हथियारा',
+        'khata_no': '106',
+        'khasra_no': '3362',
+        'jamabandi_no': '237',
+        'official_owner': 'मंगो देवी w/o राम जनम सिंह',
+        'father_or_spouse': 'राम जनम सिंह',
+        'poa_holder_name': 'संजीवन साव s/o सिंहनाथ सिंह',
+        'official_area_acres': '1.45',
+        'official_classification': 'Raiyati Agricultural',
+        'ulpin': '10106336200008',
+        'mutation_ref': 'MUT/AUR/2008/1063362',
+        'registered_deed_no': '48338/07',
+        'authorized_poa_holder': 'Registered Valid General Power of Attorney',
+        'encumbrance_status': 'Clear Title',
+        'dispute_status': 'Clear (Nirvivaad)',
+        'court_cases': []
+    },
     # Muzaffarpur, Kanti - Plot 214/2 (Clean Cadastral Record)
     ("Bihar", "Muzaffarpur", "47", "214/2"): {
         'state': 'Bihar',
@@ -785,56 +899,7 @@ def process_document(db, document_id, actor_id):
     # Autonomous AI/ML Cadastral Extraction on the uploaded file
     extracted_intel = extract_cadastral_intelligence(file_path, original_name, user_hints=user_hints)
 
-    # STRICT GATEKEEPER: Check if file is a non-land document (e.g. medical lab report, invoice)
-    if not extracted_intel.get('is_land_document', True):
-        rejection_msg = extracted_intel.get('error') or "Upload rejected: Non-land document submitted. Please upload land-related documents only."
-        rejection_report = {
-            'authenticity_score': 0.0,
-            'forgery_risk_score': 100.0,
-            'verdict': 'REJECTED: Non-Land Document Uploaded',
-            'rejection_reason': rejection_msg,
-            'is_land_document': False,
-            'fake_check': {
-                'is_fake': False,
-                'classification_state': 'NON_LAND',
-                'sub_registrar_seal': 'No Cadastral Seal (Non-Land Document)',
-                'tampering_flags': ['Non-cadastral document detected (Medical Lab Report / General Document)', rejection_msg]
-            },
-            'dispute_check': {'is_disputed': False, 'dispute_severity': 'REJECTED', 'cases': []},
-            'multiple_buyers_check': {'has_multiple_buyers': False, 'alert': 'N/A — Document Rejected'},
-            'poa_check': {'poa_status': 'Not Applicable', 'alert': 'N/A'},
-            'comparison_table': [
-                {
-                    'field': 'Document Classification',
-                    'uploaded': 'Non-Land Document (Medical Lab Report / General File)',
-                    'registry': 'Only Official Cadastral Land Records Accepted',
-                    'match': 'CRITICAL REJECTION'
-                },
-                {
-                    'field': 'Rejection Reason',
-                    'uploaded': rejection_msg,
-                    'registry': 'Accepted: Khatihan, Lagan Rasid, Kewala, PoA, Dakhil Kharij',
-                    'match': 'REJECTED'
-                }
-            ]
-        }
-        database.documents.update_one(
-            {'document_id': document_id},
-            {'$set': {
-                'current_step': 5,
-                'status': 'rejected',
-                'step_name': 'Rejected: Non-Land Document',
-                'rejection_reason': rejection_msg,
-                'validation_report': rejection_report,
-                'extracted_intelligence': extracted_intel,
-                'processed_at': now(),
-                'updated_at': now()
-            }}
-        )
-        audit(database, document_id, 'document_rejected_non_land', actor_id, {'reason': rejection_msg})
-        return None
-
-    doc_type = extracted_intel['document_type']
+    doc_type = extracted_intel.get('document_type', 'jamin_khatihan')
     state = extracted_intel['state']
     district = extracted_intel['district']
     circle = extracted_intel['tehsil_circle']

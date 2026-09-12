@@ -186,32 +186,70 @@ def fetch_official_government_record(
     portal_info = get_portal_for_state(state_clean)
 
     # 1. Check if an official pre-synchronized record exists in MongoDB collection
-    if database is not None and khata_clean and khasra_clean:
+    if database is not None and (khata_clean or khasra_clean):
         try:
-            cached = database.official_land_records.find_one({
-                'state': {'$regex': f'^{re.escape(state_clean)}$', '$options': 'i'},
-                'district': {'$regex': f'^{re.escape(dist_clean)}$', '$options': 'i'},
-                'khata_no': khata_clean,
+            khata_variants = [khata_clean, khata_clean.lstrip('0')] if khata_clean else []
+            if khata_clean.isdigit():
+                khata_variants.append(f"{int(khata_clean):05d}")
+            khata_variants = list(set([v for v in khata_variants if v]))
+
+            dist_pattern = re.escape(dist_clean) if dist_clean else '.*'
+            if any(p in dist_clean.lower() for p in ['prayag', 'allahabad', 'प्रयागराज']):
+                dist_pattern = 'Prayagraj|Allahabad|प्रयागराज'
+            elif any(p in dist_clean.lower() for p in ['aurangabad', 'औरंगाबाद']):
+                dist_pattern = 'Aurangabad|औरंगाबाद'
+
+            query = {
                 'khasra_no': khasra_clean
-            })
-            if cached and not mode in ['dispute', 'double_selling']:
+            }
+            if khata_variants:
+                query['khata_no'] = {'$in': khata_variants}
+            if dist_clean:
+                query['district'] = {'$regex': dist_pattern, '$options': 'i'}
+            if state_clean:
+                query['state'] = {'$regex': f'^{re.escape(state_clean)}$', '$options': 'i'}
+
+            cached = database.official_land_records.find_one(query)
+            if not cached and khasra_clean:
+                fallback_q = {'khasra_no': khasra_clean}
+                if khata_variants:
+                    fallback_q['khata_no'] = {'$in': khata_variants}
+                cached = database.official_land_records.find_one(fallback_q)
+
+            if cached and mode not in ['dispute', 'double_selling']:
                 cached.pop('_id', None)
                 cached['ground_truth_found'] = True
                 cached['not_found'] = False
+                if not cached.get('official_owner') and cached.get('raiyat_name'):
+                    cached['official_owner'] = cached['raiyat_name']
+                if not cached.get('official_area_acres') and cached.get('area_acres'):
+                    cached['official_area_acres'] = cached['area_acres']
+                if not cached.get('tehsil_circle') and cached.get('circle'):
+                    cached['tehsil_circle'] = cached['circle']
+                if not cached.get('village_mauza') and cached.get('village'):
+                    cached['village_mauza'] = cached['village']
                 return cached
         except Exception as e:
             logger.warning(f"Error querying official_land_records cache: {e}")
 
-    # 2. Check fallback in authentic seed data (e.g. Muzaffarpur, Aurangabad, Patna parcels)
+    # 2. Check fallback in authentic seed data (e.g. Muzaffarpur, Aurangabad, Prayagraj, Patna parcels)
     if khata_clean and khasra_clean:
         try:
             from .seed_data import OFFICIAL_LAND_RECORDS
+            khata_variants = [khata_clean, khata_clean.lstrip('0')]
             for rec in OFFICIAL_LAND_RECORDS:
-                if (rec.get('state', '').lower() == state_clean.lower() and
-                    rec.get('district', '').lower() == dist_clean.lower() and
-                    str(rec.get('khata_no', '')).strip() == khata_clean and
-                    str(rec.get('khasra_no', '')).strip() == khasra_clean):
-                    
+                rec_khata = str(rec.get('khata_no', '')).strip()
+                rec_khata_clean = str(rec.get('khata_no_clean', rec_khata.lstrip('0'))).strip()
+                khasra_match = (str(rec.get('khasra_no', '')).strip() == khasra_clean)
+                khata_match = (rec_khata in khata_variants or rec_khata_clean in khata_variants)
+
+                dist_match = True
+                if dist_clean:
+                    r_dist = str(rec.get('district', '')).lower()
+                    d_clean_l = dist_clean.lower()
+                    dist_match = (r_dist in d_clean_l or d_clean_l in r_dist or ('prayag' in r_dist and 'prayag' in d_clean_l) or ('aurangabad' in r_dist and 'aurangabad' in d_clean_l))
+
+                if khasra_match and khata_match and dist_match:
                     is_dispute = mode == 'dispute' or rec.get('is_disputed', False)
                     return {
                         'state': rec.get('state', state_clean),
@@ -229,9 +267,10 @@ def fetch_official_government_record(
                         'dispute_status': rec.get('dispute_status', 'Clear (Nirvivaad)'),
                         'court_cases': rec.get('court_cases', []),
                         'authorized_poa_holder': rec.get('poa_status', 'Direct Raiyat Ownership (No Intermediary PoA)'),
+                        'poa_holder_name': rec.get('poa_holder_name', ''),
                         'last_revenue_receipt': {
                             'receipt_no': f"BR-REC-{dist_clean[:3].upper()}-{khata_clean}-{khasra_clean.replace('/', '')}",
-                            'financial_year': "2024-2025",
+                            'financial_year': rec.get('fasli_year', "2024-2025"),
                             'status': "Paid & Valid (अद्यतन लगान चुकता)",
                             'online_portal': portal_info['portal_name']
                         },

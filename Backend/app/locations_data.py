@@ -273,6 +273,7 @@ ALL_INDIAN_LOCATIONS = {
                 "Maharajganj"
             ],
             "Daudnagar": [
+                "Hathiara",
                 "Daudnagar",
                 "Tarari",
                 "Samshernagar",
@@ -3211,6 +3212,13 @@ ALL_INDIAN_LOCATIONS = {
                 "Meja",
                 "Bara",
                 "Shankargarh"
+            ],
+            "Handia": [
+                "Banpurwa Partipur",
+                "Khargapur",
+                "Handia",
+                "Saidabad",
+                "Dhanupur"
             ]
         },
         "Agra": {

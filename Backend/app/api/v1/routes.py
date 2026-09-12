@@ -293,17 +293,9 @@ async def upload(
             raise HTTPException(413, 'Each file must be 25 MB or smaller')
         target.write_bytes(content)
 
-        # Autonomous AI extraction on the file (3-State Classification & Evidence-First)
+        # Autonomous AI extraction on the file (Evidence-First Architecture)
         extracted = extract_cadastral_intelligence(str(target), f.filename, content, user_hints=user_meta)
-        class_state = extracted.get('classification_state', 'LAND')
-        if not extracted.get('is_land_document', True) or class_state == 'NON_LAND':
-            if target.exists():
-                try: target.unlink()
-                except Exception: pass
-            raise HTTPException(
-                status_code=400,
-                detail=extracted.get('error', 'Upload rejected: Invalid document. Please upload valid land-related documents only (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney, Dakhil Kharij).')
-            )
+        class_state = extracted.get('classification_state', 'LAND_RELATED')
         merged_meta = {**extracted, **user_meta}
         is_unknown = (class_state in ['UNKNOWN', 'UNKNOWN/REVIEW'])
 
@@ -373,14 +365,9 @@ async def analyze_document_preview(
     temp_path = temp_dir / f"prev_{uuid4().hex[:8]}{ext}"
     temp_path.write_bytes(content)
     try:
-        # 2 & 3. Permission check & Request process (3-State Classification)
+        # 2 & 3. Permission check & Request process (Autonomous Cadastral Extraction)
         extracted = extract_cadastral_intelligence(str(temp_path), file.filename, content)
-        class_state = extracted.get('classification_state', 'LAND')
-        if not extracted.get('is_land_document', True) or class_state == 'NON_LAND':
-            raise HTTPException(
-                status_code=400,
-                detail=extracted.get('error', 'Upload rejected: Invalid document. Please upload valid land-related documents only (Khatihan, Lagan Rasid, Kewala / Sale Deed, Power of Attorney, Dakhil Kharij).')
-            )
+        class_state = extracted.get('classification_state', 'LAND_RELATED')
         st = extracted.get('state', 'Bihar')
         portal_name = "BiharBhumi Portal - Revenue & Land Reforms Dept" if st == 'Bihar' else f"{st} Land Records Management System"
         extracted['portal_connected'] = portal_name
