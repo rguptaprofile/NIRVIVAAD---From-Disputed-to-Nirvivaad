@@ -15,9 +15,23 @@ const nav = [
 
 const fmt = n => new Intl.NumberFormat('en-IN').format(n || 0);
 const Logo = () => (
-  <div className="landing-logo">
-    <span>NV</span>
-    <b>NIRVIVAAD</b>
+  <div className="landing-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+    <img
+      src="/logo.png"
+      alt="NIRVIVAAD Logo"
+      style={{
+        width: '38px',
+        height: '38px',
+        minWidth: '38px',
+        objectFit: 'contain',
+        borderRadius: '8px',
+        background: '#ffffff',
+        padding: '2px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        border: '1px solid rgba(255,255,255,0.6)'
+      }}
+    />
+    <b style={{ letterSpacing: '0.08em', fontWeight: 800 }}>NIRVIVAAD</b>
   </div>
 );
 
@@ -4152,10 +4166,28 @@ function App() {
     <div className="app react-app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">
-            <svg viewBox="0 0 34 34" fill="none">
-              <path d="M4 30 L17 4 L30 30 M4 30 L30 30 M10 30 L10 18 L17 18 M24 30 L24 22 L17 22" stroke="#9FB09F" strokeWidth="1.3" />
-            </svg>
+          <div
+            className="brand-mark"
+            style={{
+              width: '40px',
+              height: '40px',
+              minWidth: '40px',
+              background: '#ffffff',
+              borderRadius: '8px',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              border: '1.5px solid #9FB09F',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
+            }}
+          >
+            <img
+              src="/logo.png"
+              alt="NIRVIVAAD Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
           </div>
           <div className="brand-text">
             <h1>NIRVIVAAD</h1>
