@@ -36,6 +36,10 @@
    - [Q4: Why do you need six members for this project?](#4-why-do-you-need-six-members-for-this-project)
    - [Q5: What was the biggest challenge your team faced?](#5-what-was-the-biggest-challenge-your-team-faced)
 4. [🏗️ Technical Architecture & 4-Step Verification Flow](#-technical-architecture--4-step-verification-flow)
+   - [Deterministic 4-Step Verification Flow](#-technical-architecture--4-step-verification-flow)
+   - [Detailed Component Architecture](#detailed-component-architecture)
+   - [2. End-to-End Document Processing Flow (SIH26018)](#2-end-to-end-document-processing-flow)
+   - [3. Human-in-the-Loop Verification Flow (SIH26018)](#3-human-in-the-loop-verification-flow)
 5. [🏛️ Government Verified "Amin" Admin & Security Access](#-government-verified-amin-admin--security-access)
 6. [🛡️ Strict Cadastral Gatekeeper & Anti-Spoofing Engine](#-strict-cadastral-gatekeeper--anti-spoofing-engine)
 7. [🗺️ GIS Cadastral & Bhu-Aadhaar (ULPIN) Engine](#-gis-cadastral--bhu-aadhaar-ulpin-engine)
@@ -296,6 +300,166 @@ YOUR APP (Frontend / Client)
                               - db.documents & db.land_records
                               - db.audit_logs (Immutable Audit Trail)
 ```
+
+---
+
+### 📑 SIH26018 Technical Flow Documentation
+
+> **SIH26018 | Technical Documentation (Page 3 & Page 4)**  
+> Official architectural execution flows for batch document processing and human-in-the-loop officer adjudication.
+
+#### 2. End-to-End Document Processing Flow
+
+```mermaid
+graph TD
+    A["1. Login + JWT"] --> B["2. Upload PDF / Image Batch"]
+    B --> C["3. Store Original + Metadata"]
+    C --> D["4. Pre-process + Quality Check"]
+    D --> E["5. OCR / Handwriting Recognition"]
+    E --> F["6. Layout + Field Extraction"]
+    F --> G["7. Normalisation + Confidence"]
+    G --> H["8. Validation + Duplicate + Reference Match"]
+    H -->|High Confidence| I["HIGH CONFIDENCE<br><b>Auto-pass</b>"]
+    H -->|Low Confidence| J["LOW CONFIDENCE<br><b>Human review</b>"]
+
+    style A fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style B fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style C fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style D fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style E fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style F fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style G fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style H fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style I fill:#e6fffa,stroke:#234e52,stroke-width:2px
+    style J fill:#fffaf0,stroke:#7b341e,stroke-width:2px
+```
+
+```text
+┌────────────────────────────────────────────────────────┐
+│                     1. Login + JWT                     │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│              2. Upload PDF / Image Batch               │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│               3. Store Original + Metadata             │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│             4. Pre-process + Quality Check             │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│           5. OCR / Handwriting Recognition             │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│              6. Layout + Field Extraction              │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│              7. Normalisation + Confidence             │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│       8. Validation + Duplicate + Reference Match       │
+└───────────────────────────┬────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+┌───────────────────────────┐   ┌───────────────────────────┐
+│      HIGH CONFIDENCE      │   │       LOW CONFIDENCE      │
+│         Auto-pass         │   │        Human review       │
+└───────────────────────────┘   └───────────────────────────┘
+```
+
+##### Detailed Pipeline Stages:
+1. **1. Login + JWT**: Secure JSON Web Token authentication with role-based segregation (`citizen` or government-credentialed `admin` Amin).
+2. **2. Upload PDF / Image Batch**: Ingests multi-page historical deeds, land maps, Khatiyan scans, and Lagaan Rasid images in batch.
+3. **3. Store Original + Metadata**: Saves immutable original deed files with comprehensive metadata (uploader ID, geo-hierarchy, timestamp, SHA-256 hash).
+4. **4. Pre-process + Quality Check**: Applies OpenCV adaptive thresholding, bilateral smoothing, DPI upsampling, and skew rectification to overcome physical paper decay.
+5. **5. OCR / Handwriting Recognition**: Multilingual OCR pipeline identifying regional scripts (Devanagari, Hindi, English, Kaithi, and Urdu) and handwritten clerk remarks.
+6. **6. Layout + Field Extraction**: Cadastral entity extraction identifying Khata, Khasra, Raiyat (Owner), Thana No., Rakba (Area), and Chauhaddi (North, South, East, West boundaries).
+7. **7. Normalisation + Confidence**: Standardizes cadastral units (Acres, Dismil, Kattha, Bigha), canonicalizes spellings, and calculates granular per-field confidence scoring.
+8. **8. Validation + Duplicate + Reference Match**: Performs real-time cross-referencing against state revenue databases (`official_land_records`), checking for duplicate sale attempts and existing encumbrances:
+   - 🟢 **HIGH CONFIDENCE (Auto-pass)**: Flawless matches with >85% confidence score and zero registry conflicts pass automatically into certified status.
+   - 🟡 **LOW CONFIDENCE (Human review)**: Records with ambiguous handwriting, missing fields, or detected discrepancies are automatically routed to the verification queue.
+
+---
+
+#### 3. Human-in-the-Loop Verification Flow
+
+```mermaid
+graph TD
+    A["AI Prediction"] --> B["Confidence + Validation"]
+    B --> C["Verification Queue"]
+    C --> D["Officer Review"]
+    D --> E["Accept / Edit / Reject"]
+    E --> F["Final Verified Record"]
+    F --> G["Audit Event + Feedback"]
+
+    style A fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style B fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style C fill:#fffaf0,stroke:#7b341e,stroke-width:1.5px
+    style D fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style E fill:#f0f4f8,stroke:#1a365d,stroke-width:1.5px
+    style F fill:#e6fffa,stroke:#234e52,stroke-width:2px
+    style G fill:#f7fafc,stroke:#4a5568,stroke-width:1.5px
+```
+
+```text
+┌────────────────────────────────────────────────────────┐
+│                      AI Prediction                     │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                 Confidence + Validation                │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                   Verification Queue                   │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                     Officer Review                     │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                  Accept / Edit / Reject                │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                  Final Verified Record                 │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                 Audit Event + Feedback                 │
+└────────────────────────────────────────────────────────┘
+```
+
+##### Detailed Verification Lifecycle:
+- **AI Prediction**: Deep-learning and heuristic entity extractors extract candidate cadastral fields from citizen-submitted deeds.
+- **Confidence + Validation**: Multi-vector validation checks ground-truth databases and assesses per-field confidence thresholds.
+- **Verification Queue**: Any document flagged with low confidence, duplicate claims, or field anomalies is triaged into the Amin Verification Queue.
+- **Officer Review**: A certified Revenue Amin or Kanungo opens the side-by-side inspection console displaying original deed scans alongside extracted values and database ground truth.
+- **Accept / Edit / Reject**: The officer exercises sovereign statutory discretion to accept genuine data, edit misspelled historical names, or reject fraudulent submissions.
+- **Final Verified Record**: The authenticated record is finalized, assigned a permanent 14-digit Bhu-Aadhaar ULPIN, and persisted to `official_land_records`.
+- **Audit Event + Feedback**: An immutable audit entry is logged to `db.audit_logs` with the Amin's verified ID, and the correction feedback is fed back to fine-tune future AI extraction accuracy.
 
 ---
 
