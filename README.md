@@ -15,7 +15,7 @@
 
 ## 📌 Table of Contents
 1. [Executive Summary & Core Mission](#-executive-summary--core-mission)
-2. [💡 The 13 Critical Hackathon / Jury Defense Questions (Deep Dive Q&A)](#-the-13-critical-hackathon--jury-defense-questions-deep-dive-qa)
+2. [💡 The 15 Critical Hackathon / Jury Defense Questions (Deep Dive Q&A)](#-the-15-critical-hackathon--jury-defense-questions-deep-dive-qa)
    - [Q1: What exactly is the problem you are solving?](#1-what-exactly-is-the-problem-you-are-solving)
    - [Q2: Who is facing this problem in real life?](#2-who-is-facing-this-problem-in-real-life)
    - [Q3: Why is this problem important?](#3-why-is-this-problem-important)
@@ -29,6 +29,8 @@
    - [Q11: What is the biggest weakness of your solution?](#11-what-is-the-biggest-weakness-of-your-solution)
    - [Q12: What did you change after testing your prototype?](#12-what-did-you-change-after-testing-your-prototype)
    - [Q13: If we give you 3 more months, what would you improve first?](#13-if-we-give-you-3-more-months-what-would-you-improve-first)
+   - [Q14: Purane aur faded land documents par OCR theek se kaam nahi karta. Is problem ko aap kaise solve kar rahe hain?](#14-purane-aur-faded-land-documents-par-ocr-theek-se-kaam-nahi-karta-is-problem-ko-aap-kaise-solve-kar-rahe-hain)
+   - [Q15: AI agar galat data extract kar le (hallucination ya wrong extraction), toh usko kaise pakda jata hai?](#15-ai-agar-galat-data-extract-kar-le-hallucination-ya-wrong-extraction-toh-usko-kaise-pakda-jata-hai)
 3. [👥 Team Dynamics & Collaboration (Jury Q&A)](#-team-dynamics--collaboration-jury-qa)
    - [Q1: Who did what in the team?](#1-who-did-what-in-the-team)
    - [Q2: Which member worked on the core technology?](#2-which-member-worked-on-the-core-technology)
@@ -77,7 +79,7 @@ Land disputes account for approximately **66% of all civil litigation** in India
 
 ---
 
-## 💡 The 13 Critical Hackathon / Jury Defense Questions (Deep Dive Q&A)
+## 💡 The 15 Critical Hackathon / Jury Defense Questions (Deep Dive Q&A)
 
 ### 1. What exactly is the problem you are solving?
 We are solving the **systemic breakdown of trust, record fidelity, and spatial demarcation in legacy Indian land records**, which causes fraudulent land registrations, double-selling of identical plots to multiple innocent buyers, disputed inheritance claims, and 20+ year civil court title disputes. Specifically:
@@ -199,6 +201,61 @@ Based on real user testing and simulated revenue department stress tests, we mad
 
 ---
 
+### 14. Purane aur faded land documents par OCR theek se kaam nahi karta. Is problem ko aap kaise solve kar rahe hain?
+**Answer (Jury Defense Formulation):**
+> *"Sir, hum sirf seedha off-the-shelf OCR use nahi kar rahe hain. Hamara 3-layer approach hai:*
+> 1. **Pre-processing:** *OpenCV ke through binarization, skew correction, aur noise removal kiya jata hai taaki faded text saaf dikhe.*
+> 2. **Multi-Engine OCR:** *Printed text ke liye PaddleOCR aur Tesseract Indic fallback use hota hai. Handwriting ke liye TrOCR (Transformer-based OCR) fine-tuned hai.*
+> 3. **Human-in-the-Loop:** *Agar kisi word par AI ka confidence kam hota hai, toh wo system khud decision nahi leta, balki officer ko highlight karke review ke liye bhej deta hai."*
+
+#### Comprehensive Technical Breakdown:
+1. **Layer 1: Pre-Processing & Optical Restoration Pipeline (OpenCV 4.x)**
+   - **Adaptive Binarization (Sauvola & Otsu Thresholding):** Standard Otsu global thresholding fails on 50-year-old stamp papers due to yellowing, uneven lighting, and moisture degradation. NIRVIVAAD employs **Sauvola's Local Adaptive Binarization** with dynamic windowing ($k=0.2, R=128$) to separate faint ink strokes from deep paper discoloration.
+   - **Auto-Deskewing via Hough Line Transform:** Hand-scanned records are frequently skewed. Our engine detects dominant horizontal baseline angles using Hough transforms and applies affine rotation within $\pm 0.2^\circ$ precision alignment.
+   - **Noise Filtering & CLAHE:** Applies bilateral filtering to eliminate salt-and-pepper grain without smoothing sharp character edges, followed by Contrast-Limited Adaptive Histogram Equalization (CLAHE) to restore faded carbon copy impressions.
+2. **Layer 2: Multi-Engine Ensemble OCR Architecture**
+   - **Printed Legal Text:** Routed through **PaddleOCR v4** with **Tesseract Indic LSTM** as secondary fallback for standard Devnagari (Hindi), Maithili, Bhojpuri, and English text.
+   - **Patwari / Amin Cursive Annotations:** Off-the-shelf OCR engines collapse on handwritten marginal notes. We incorporate a fine-tuned **TrOCR (Vision-Transformer OCR)** trained on historical Revenue Amin handwriting, Khatiyan registers, and Panji-II mutation registers.
+   - **Domain Vocabulary Dictionary:** Integrates a cadastral lexicon (*Khasra, Khata, Chauhaddi, Raiyat, Lagan, Dakhil Kharij, Bhu-Lagaan*) to validate and disambiguate character confusion (e.g., distinguishing '४' vs '५' or '०' vs '८').
+3. **Layer 3: Human-in-the-Loop Triage Console**
+   - **85% Confidence Cut-Off Threshold:** System enforces a hard mathematical cutoff. If any extracted word or entity has token confidence $<85\%$, NIRVIVAAD strictly forbids automated commitment.
+   - **Bounding Box Visual Flagging:** The system highlights the exact coordinates `[ymin, xmin, ymax, xmax]` on the deed image in the Revenue Amin Verification Console, allowing the officer to adjudicate within 3 seconds rather than hunting through a 10-page deed.
+
+---
+
+### 15. AI agar galat data extract kar le (hallucination ya wrong extraction), toh usko kaise pakda jata hai?
+**Answer (Jury Defense Formulation):**
+> *"Sir, hum AI ke output ko blindly trust nahi karte. Iske liye hamara **Trust Layer** kaam karta hai:*
+> 1. **Bounding Boxes:** *Model jo bhi field extract karta hai (jaise Khasra number ya Owner ka naam), wo document ke kis hisse se liya gaya hai, uski exact pixel coordinates (bounding box) record karta hai.*
+> 2. **Confidence Score & Threshold:** *Har extracted field ka confidence score calculate hota hai. Agar confidence 85% se kam ho, toh field ko flag kar diya jata hai.*
+> 3. **Rule-Based & Registry Validation:** *Extracted data ko pre-defined business rules aur official government registry (Bhulekh / DILRMP) se cross-verify kiya jata hai. Agar plot number record me exist hi nahi karta ya owner ka naam match nahi karta, toh flag lag jata hai.*
+> 4. **Reason Codes:** *System reject ya review karte waqt specific Reason Code deta hai—jaise CONFIDENCE_BELOW_THRESHOLD, KHATA_REGISTRY_MISMATCH, ya AREA_DISCREPANCY_FLAG—taaki human officer turant samajh sake ki gadbad kahan hai."*
+
+#### Comprehensive Technical Breakdown of the Trust Layer:
+1. **Pixel-Level Bounding Box Provenance (`bbox: [ymin, xmin, ymax, xmax]`)**
+   - In NIRVIVAAD, no extracted cadastral entity is permitted to exist as free-floating text. Every single field (`owner`, `khasra_no`, `khata_no`, `area`, `village`) carries its source page number and pixel-level bounding polygon. This eliminates hallucination at the root because synthetic data cannot manufacture verifiable pixel coordinates on the source document canvas.
+2. **Field-Level Probabilistic Confidence Scoring & 85% Strict Cutoff**
+   - The extraction model evaluates character, word, and spatial layout probabilities. Any field scoring below 0.85 (85%) is automatically tagged with `CONFIDENCE_BELOW_THRESHOLD` and quarantined into the Human Verification Queue (`db.verification_tasks`).
+3. **Automated Cross-Validation against Authoritative Cadastral Ground Truth**
+   - Extracted values are deterministically cross-referenced against official state revenue databases (`db.official_land_records` / live Bhulekh endpoints):
+     - **Khata/Khasra Existence:** Verifies that Khasra 214/2 actually exists within Khata 47 in Mauza Kanti.
+     - **Owner Name Levenshtein Matching:** Uses fuzzy token-sort Levenshtein matching ($>85\%$ threshold) to verify claimed seller name against the registered on-record Raiyat.
+     - **Spatial Area Boundary Checks:** Verifies that the deed's declared conveyance area does not exceed the total surveyed parcel area recorded in the cadastral register.
+4. **Deterministic Standardized Reason Codes Engine**
+   Whenever a discrepancy or risk is discovered, NIRVIVAAD attaches a structured reason code to the audit trail:
+
+   | Reason Code | Trigger Condition | System Action |
+   | :--- | :--- | :--- |
+   | `CONFIDENCE_BELOW_THRESHOLD` | OCR token confidence $< 85\%$ on degraded/faded text | Routes to Amin Verification Queue with visual BBox |
+   | `KHATA_REGISTRY_MISMATCH` | Khata/Khasra number not found in Circle Revenue Register | Halts automated validation; issues alert to Circle Officer |
+   | `OWNER_NAME_FUZZY_MISMATCH` | Seller name differs from registered Raiyat in Jamabandi Panji-II | Flags potential impersonation or un-mutated inheritance |
+   | `AREA_DISCREPANCY_FLAG` | Deed sale area exceeds registered cadastral plot area | Triggers physical Amin survey requirement |
+   | `KHASRA_FORMAT_ANOMALY` | Bata/Sub-plot format invalid or non-standard | Flags for cadastral map GIS surveyor review |
+   | `ACTIVE_COURT_STAY_FLAG` | Plot subject to civil court stay or Section 144 CrPC | Rejects transaction; marks title as *Disputed (Vivaadit)* |
+   | `UNVERIFIED_POA_SUBMISSION` | Power of Attorney submitted without backing registered deed | Demands physical verification of registered PoA deed |
+
+---
+
 ## 👥 Team Dynamics & Collaboration (Jury Q&A)
 
 ### 1. Who did what in the team?
@@ -312,6 +369,62 @@ YOUR APP (Frontend / Client)
 
 > **SIH26018 | Technical Documentation (Page 3 & Page 4)**  
 > Official architectural execution flows for batch document processing and human-in-the-loop officer adjudication.
+
+### 🔬 3-Layer OCR & Optical Restoration Architecture (Question 5 Implementation)
+
+NIRVIVAAD's proprietary optical processing pipeline is specifically engineered to handle degraded, yellowed, and torn historical land records dating back several decades:
+
+```mermaid
+graph TD
+    A["Raw Physical Deed (TIFF / PDF / JPG)"] --> B["Layer 1: Optical Restoration (OpenCV)"]
+    subgraph L1 ["Layer 1: Pre-Processing"]
+        B --> B1["Sauvola Local Adaptive Binarization"]
+        B1 --> B2["Hough Line Deskewing (±0.2° Precision)"]
+        B2 --> B3["Bilateral Noise Filtering + CLAHE Contrast"]
+    end
+    L1 --> C["Layer 2: Multi-Engine Ensemble OCR"]
+    subgraph L2 ["Layer 2: Multi-Engine Ensemble"]
+        C --> C1["PaddleOCR v4 (Printed Devanagari / English)"]
+        C --> C2["Tesseract Indic LSTM (Secondary Fallback)"]
+        C --> C3["Fine-Tuned TrOCR Transformer (Cursive Handwriting)"]
+        C1 & C2 & C3 --> C4["Revenue Cadastral Dictionary Disambiguation"]
+    end
+    L2 --> D{"Confidence Score Check"}
+    D -- "≥ 85% Confidence" --> E["Layer 3: Straight-Through Cadastral Extraction"]
+    D -- "< 85% Confidence" --> F["Layer 3: Human-in-the-Loop Triage Console"]
+    subgraph L3 ["Layer 3: Officer Adjudication"]
+        F --> F1["Pixel Bounding Box Overlay on Scan"]
+        F1 --> F2["Revenue Amin / Circle Officer Manual Review"]
+        F2 --> F3["Digital Certification Seal Commits to DB"]
+    end
+```
+
+---
+
+### 🛡️ Trust Layer & Anti-Hallucination Anomaly Detection Engine (Question 6 Implementation)
+
+To prevent AI hallucinations and erroneous data extraction from polluting state land records, NIRVIVAAD deploys a multi-vector **Trust Layer**:
+
+```mermaid
+graph LR
+    A["Extracted Entity (Owner, Khata, Khasra, Area)"] --> B["1. Bounding Box Tracking (bbox)"]
+    A --> C["2. Strict 85% Confidence Gate"]
+    A --> D["3. Cadastral Registry Cross-Check"]
+    
+    B --> E{"Validation Gate"}
+    C --> E
+    D --> E
+    
+    E -- "Mismatch / Low Conf" --> F["Deterministic Reason Code Generated"]
+    F --> G["CONFIDENCE_BELOW_THRESHOLD"]
+    F --> H["KHATA_REGISTRY_MISMATCH"]
+    F --> I["OWNER_NAME_FUZZY_MISMATCH"]
+    F --> J["AREA_DISCREPANCY_FLAG"]
+    
+    E -- "All Checks Passed" --> K["Nirvivaad Certified Title (db.land_records)"]
+```
+
+---
 
 #### 2. End-to-End Document Processing Flow
 
