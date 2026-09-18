@@ -15,23 +15,9 @@ const nav = [
 
 const fmt = n => new Intl.NumberFormat('en-IN').format(n || 0);
 const Logo = () => (
-  <div className="landing-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-    <img
-      src="/logo.png"
-      alt="NIRVIVAAD Logo"
-      style={{
-        width: '38px',
-        height: '38px',
-        minWidth: '38px',
-        objectFit: 'contain',
-        borderRadius: '8px',
-        background: '#ffffff',
-        padding: '2px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        border: '1px solid rgba(255,255,255,0.6)'
-      }}
-    />
-    <b style={{ letterSpacing: '0.08em', fontWeight: 800 }}>NIRVIVAAD</b>
+  <div className="landing-logo">
+    <span>NV</span>
+    <b>NIRVIVAAD</b>
   </div>
 );
 
@@ -190,8 +176,7 @@ function Auth({ done, go }) {
   function proceedWithNewAccount() {
     if (regSuccess?.access_token) {
       localStorage.setItem('nirvivaad_token', regSuccess.access_token);
-      const targetView = (regSuccess.user?.role === 'admin' || regSuccess.gov_amin_id) ? 'admin' : 'dashboard';
-      done(regSuccess.user, targetView);
+      done(regSuccess.user);
     } else {
       setMode('signin');
       setRegSuccess(null);
@@ -352,42 +337,7 @@ function Auth({ done, go }) {
                 </>
               )}
 
-              {error && (
-                <div className="notice" style={{ background: '#FFF4E5', borderLeft: '4px solid #E65100', padding: '10px 14px', margin: '12px 0', borderRadius: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#BF360C', fontSize: 13 }}>
-                    <span>⚠️</span> {error}
-                  </div>
-                  {(error.includes('unreachable') || error.includes('backend connection')) && (
-                    <div style={{ marginTop: 8, fontSize: 11.5, color: '#4E342E', lineHeight: 1.5 }}>
-                      <div style={{ marginBottom: 6 }}>
-                        Current Target: <code style={{ background: '#FFE0B2', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>{api.getActiveBase()}</code>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          style={{ background: '#195B42', color: '#FFF', padding: '4px 10px', fontSize: 11, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
-                          onClick={async () => {
-                            setError('Testing backend connection…');
-                            const res = await api.checkHealth();
-                            if (res.ok) {
-                              setError('');
-                              alert(`✓ Backend connected successfully at ${res.base}!`);
-                            } else {
-                              setError('Still unreachable. Please ensure the backend is running on port 8000 (run start_all.bat).');
-                            }
-                          }}
-                        >
-                          🔄 Test &amp; Auto-Reconnect
-                        </button>
-                        <span style={{ fontSize: 11, color: '#6D4C41' }}>
-                          Tip: Run <b>start_all.bat</b> in the project root folder.
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              {error && <p className="notice">{error}</p>}
 
               <button className="auth-action" disabled={busy}>
                 {busy ? 'Verifying with system…' : signup ? `Generate Unique ID & Register` : (role === 'admin' ? `Sign in to Admin Console →` : `Sign in to User Dashboard →`)}
@@ -634,12 +584,6 @@ function Dashboard({ d, goView }) {
   const [pendingList, setPendingList] = useState([]);
   const [activeVerifyRecord, setActiveVerifyRecord] = useState(null);
 
-  // Dashboard Verified Land Parcels & Evidence Matrix State (ChatGPT Section 8 & 28)
-  const [userRecords, setUserRecords] = useState([]);
-  const [activeReportDoc, setActiveReportDoc] = useState(null);
-  const [dashSearchQuery, setDashSearchQuery] = useState('');
-  const [loadingRecords, setLoadingRecords] = useState(false);
-
   const totalProc = d?.documents_processed ?? 0;
   const verified = d?.verified_records ?? 0;
   const pending = d?.pending_tasks ?? 0;
@@ -651,52 +595,12 @@ function Dashboard({ d, goView }) {
   const pctFlagged = totalValidations ? Math.round((errors / totalValidations) * 100) : 0;
   const recentList = d?.recent_activity || [];
 
-  const loadUserRecords = () => {
-    setLoadingRecords(true);
+  const loadPendingRecords = () => {
     api.records().then(recs => {
-      setUserRecords(recs || []);
       const needsReview = (recs || []).filter(r => r.status === 'needs_review' || r.status === 'pending');
       setPendingList(needsReview);
-    }).catch(() => {}).finally(() => setLoadingRecords(false));
+    }).catch(() => { });
   };
-
-  async function openParcelReport(rec) {
-    if (rec.document_id) {
-      try {
-        const rep = await api.documentReport(rec.document_id);
-        if (rep) {
-          setActiveReportDoc(rep);
-          return;
-        }
-      } catch (e) {
-        console.warn('Doc report fetch fallback:', e);
-      }
-    }
-    // Fallback: use record data directly
-    setActiveReportDoc({
-      document: {
-        document_id: rec.document_id || rec.record_id,
-        original_name: `${rec.document_type || 'Land Record'} · Plot ${rec.khasra_no}`,
-        metadata: {
-          claimed_owner: rec.owner,
-          khata_no: rec.khata_no,
-          khasra_no: rec.khasra_no,
-          village_mauza: rec.village,
-          district: rec.district,
-          state: rec.state,
-          area: rec.area
-        },
-        classified_type: rec.document_type
-      },
-      record: rec,
-      validation_report: rec.validation_report || {
-        authenticity_score: rec.authenticity_score ?? 92,
-        verdict: 'No discrepancies detected in checked records (Nirvivaad Authenticated)',
-        comparison_table: rec.validation_report?.comparison_table || [],
-        evidence_matrix: rec.validation_report?.evidence_matrix || []
-      }
-    });
-  }
 
   async function loadDashboardGis(khasraVal) {
     setLoadingGis(true);
@@ -724,7 +628,7 @@ function Dashboard({ d, goView }) {
       setLoading(false);
     }).catch(() => setLoading(false));
 
-    loadUserRecords();
+    loadPendingRecords();
     loadDashboardGis();
   }, []);
   return (
@@ -873,167 +777,6 @@ function Dashboard({ d, goView }) {
         </div>
       </div>
 
-      {/* Verified Land Parcels & Evidence Matrix Console (ChatGPT Section 8, 22, 28) */}
-      <div className="dash-parcels-section">
-        <div className="panel-head" style={{ marginBottom: 14 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 20 }}>📑</span>
-              <h4 style={{ margin: 0 }}>Verified Land Parcels &amp; Evidence Matrix</h4>
-            </div>
-            <p className="sub" style={{ margin: '3px 0 0' }}>
-              Field-by-field algorithmic cross-referencing between submitted records and official on-record BiharBhumi / DILRMP land registries.
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className="status-pill done">{userRecords.length} Active Records</span>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => goView('upload')}
-              style={{ fontWeight: 600 }}
-            >
-              + Ingest &amp; Verify Document
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Filter */}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
-          <input
-            style={{ padding: '7px 12px', fontSize: 12, flex: 1, maxWidth: 360, background: '#F8FCF9', border: '1px solid #C4DCCE', borderRadius: 4 }}
-            placeholder="Search by Khasra / Plot no, Khata, or Raiyat Owner…"
-            value={dashSearchQuery}
-            onChange={e => setDashSearchQuery(e.target.value)}
-          />
-          {dashSearchQuery && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => setDashSearchQuery('')}
-            >
-              ✕ Clear
-            </button>
-          )}
-        </div>
-
-        {userRecords.length > 0 ? (
-          <div className="dash-parcels-grid">
-            {userRecords
-              .filter(rec => {
-                if (!dashSearchQuery.trim()) return true;
-                const q = dashSearchQuery.toLowerCase();
-                return (
-                  (rec.khasra_no || '').toLowerCase().includes(q) ||
-                  (rec.khata_no || '').toLowerCase().includes(q) ||
-                  (rec.owner || '').toLowerCase().includes(q) ||
-                  (rec.village || '').toLowerCase().includes(q) ||
-                  (rec.district || '').toLowerCase().includes(q)
-                );
-              })
-              .slice(0, 6)
-              .map(rec => {
-                const isVerified = rec.status === 'verified';
-                const score = rec.authenticity_score ?? 94;
-
-                return (
-                  <div className="dash-parcel-card" key={rec.record_id}>
-                    <div>
-                      <div className="dpc-top">
-                        <div>
-                          <div className="dpc-title">Plot {rec.khasra_no} · Khata {rec.khata_no}</div>
-                          <div className="dpc-sub">{rec.village}, {rec.district}, {rec.state}</div>
-                        </div>
-                        <span className={`status-pill ${isVerified ? 'done' : 'review'}`}>
-                          {isVerified ? '✓ Nirvivaad (No Discrepancy)' : '⚠️ Requires Review'}
-                        </span>
-                      </div>
-
-                      <div className="dpc-specs">
-                        <div className="dpc-spec-item">
-                          <span>Recorded Raiyat</span>
-                          <b>{rec.owner || 'On-Record Raiyat'}</b>
-                        </div>
-                        <div className="dpc-spec-item">
-                          <span>Area</span>
-                          <b>{rec.area || '1.00'} Acre(s)</b>
-                        </div>
-                        <div className="dpc-spec-item">
-                          <span>Bhu-Aadhaar (ULPIN)</span>
-                          <b className="mono" style={{ color: '#1A5A3F' }}>{rec.ulpin || '10555143266615'}</b>
-                        </div>
-                        <div className="dpc-spec-item">
-                          <span>Classification</span>
-                          <b>{rec.ground_truth?.official_classification || 'Agricultural'}</b>
-                        </div>
-                      </div>
-
-                      <div className="dpc-score-bar">
-                        <div className="dpc-score-meta">
-                          <span>Multi-Vector Evidence Score</span>
-                          <span>{score}% Concordance</span>
-                        </div>
-                        <div className="dpc-bar-track">
-                          <div
-                            className="dpc-bar-fill"
-                            style={{
-                              width: `${score}%`,
-                              background: score >= 70 ? '#2D6A4F' : '#B8382C'
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="dpc-actions">
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-sm"
-                        style={{ background: '#EBF4EF', borderColor: '#235F44', color: '#1B523A', fontWeight: 600, fontSize: 11 }}
-                        onClick={() => openParcelReport(rec)}
-                      >
-                        📊 View Side-by-Side Evidence Matrix
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        style={{ fontSize: 11, color: '#3A6351' }}
-                        onClick={() => {
-                          if (rec.state) setGisState(rec.state);
-                          if (rec.district) setGisDistrict(rec.district);
-                          if (rec.village) setGisVillage(rec.village);
-                          if (rec.khasra_no) {
-                            setGisKhasra(rec.khasra_no);
-                            loadDashboardGis(rec.khasra_no);
-                          }
-                        }}
-                      >
-                        🗺️ Inspect in GIS
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '30px 20px', background: '#F9FDFB', borderRadius: 6, border: '1px dashed #BFD8CB' }}>
-            <span style={{ fontSize: 28 }}>📜</span>
-            <h4 style={{ margin: '8px 0 4px', color: '#174734' }}>No land records digitized yet</h4>
-            <p style={{ margin: '0 0 14px', fontSize: 12, color: '#5B796C' }}>
-              Upload your land document (Khatihan, Kewala / Sale Deed, Lagan Rasid) to initiate automated OCR extraction, BiharBhumi concordance checking, and Bhu-Aadhaar generation.
-            </p>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => goView('upload')}
-              style={{ fontWeight: 600 }}
-            >
-              🚀 Ingest &amp; Verify First Land Document
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Interactive GIS Cadastral Parcel & Bhu-Aadhaar Spatial Explorer on User Dashboard */}
       <div className="dash-gis-container">
         <div className="panel-head" style={{ marginBottom: 12 }}>
@@ -1143,29 +886,20 @@ function Dashboard({ d, goView }) {
           onVerified={(updated) => {
             setPendingList(prev => prev.filter(p => p.record_id !== updated.record_id));
             setActiveVerifyRecord(null);
-            loadUserRecords();
+            loadPendingRecords();
           }}
-        />
-      )}
-
-      {/* Side-by-Side Evidence Matrix Report Modal on Dashboard (ChatGPT Solution) */}
-      {activeReportDoc && (
-        <ValidationReportModal
-          reportData={activeReportDoc}
-          onClose={() => setActiveReportDoc(null)}
         />
       )}
     </>
   );
 }
 
-// 5-POINT VALIDATION & EVIDENCE MATRIX REPORT MODAL (ChatGPT Document Intelligence Pipeline)
+// 5-POINT VALIDATION REPORT MODAL
 function ValidationReportModal({ reportData, onClose }) {
   if (!reportData) return null;
   const rep = reportData.validation_report || {};
   const doc = reportData.document || {};
   const meta = doc.metadata || {};
-  const record = reportData.record || {};
 
   const score = rep.authenticity_score ?? 85;
   const isFake = rep.fake_check?.is_fake;
@@ -1173,394 +907,33 @@ function ValidationReportModal({ reportData, onClose }) {
   const hasDoubleSelling = rep.multiple_buyers_check?.has_multiple_buyers;
   const poaStatus = rep.poa_check?.poa_status;
 
-  const govSource = rep.government_source_info || {
-    department: `${meta.state || 'Bihar'} Revenue & Land Reforms Department`,
-    system: (meta.state || 'Bihar') === 'Bihar' ? 'BiharBhumi Portal' : `${meta.state || 'National'} DILRMP Gateway`,
-    source_type: 'Official Cadastral System of Record',
-    status: 'FOUND in Official Registry',
-    retrieved_at: 'Real-time Lookup Synchronized',
-    database_collection: 'official_land_records'
-  };
-
-  const vb = rep.verification_breakdown || {
-    identity_match: 100,
-    location_match: 100,
-    parcel_match: 97,
-    area_match: 95,
-    registration_match: 100,
-    overall_evidence_score: score
-  };
-
-  const areaDelta = rep.area_discrepancy_detail || {};
-
-  // Prefer rich evidence_matrix if available, fallback to comparison_table
-  const matrixRows = rep.evidence_matrix && rep.evidence_matrix.length ? rep.evidence_matrix : (rep.comparison_table || []).map(row => ({
-    field: row.field,
-    icon: row.field.includes('Owner') ? '👤' : row.field.includes('Area') ? '📐' : row.field.includes('Khata') ? '📑' : row.field.includes('Khasra') ? '🗺️' : '⚖️',
-    document_value: row.uploaded,
-    document_evidence: 'Scanned Document OCR / Clause',
-    official_value: row.registry,
-    official_evidence: 'Official Registry Record',
-    decision: row.match?.toUpperCase().includes('MATCH') ? 'MATCH' : row.match?.toUpperCase().includes('AREA') ? 'DISCREPANCY' : row.match?.toUpperCase().includes('MISMATCH') ? 'MISMATCH' : 'PARTIAL',
-    confidence: row.match?.toUpperCase().includes('MATCH') ? 98 : 65,
-    notes: row.match
-  }));
-
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-sheet" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span className="badge-tag">{doc.document_id || record.record_id || 'DOC-VERIFIED'}</span>
-              <span className="status-pill done" style={{ fontSize: 10.5 }}>✓ DILRMP Cadastral Verification</span>
-            </div>
-            <h3 style={{ margin: 0 }}>Document Intelligence &amp; Verification Report</h3>
-            <p className="sub" style={{ margin: '3px 0 0' }}>
-              {doc.original_name || 'Land Title Record'}{meta.village_mauza || meta.district ? ` · ${[meta.village_mauza, meta.district, meta.state].filter(Boolean).join(', ')}` : ''}
-            </p>
+            <span className="badge-tag">{doc.document_id}</span>
+            <h3>Validation &amp; Land Intelligence Report</h3>
+            <p className="sub">{doc.original_name}{meta.village_mauza || meta.district ? ` · ${[meta.village_mauza, meta.district, meta.state].filter(Boolean).join(', ')}` : ''}</p>
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
         <div className="modal-body">
-          {/* Score & Verdict Banner (Calibrated Legal Verdict - ChatGPT Section 23) */}
+          {/* Score & Verdict Banner */}
           <div className={`verdict-banner ${score >= 70 ? 'good' : score >= 40 ? 'warn' : 'danger'}`}>
             <div className="vb-left">
               <span className="vb-score">{score}%</span>
               <div>
-                <h4>{rep.verdict || (score >= 70 ? 'No discrepancies detected in checked records (Nirvivaad Authenticated)' : 'Discrepancy / Review Flagged')}</h4>
-                <p>Evaluated using {rep.ai_model_evaluated || 'NIRVIVAAD Multilingual Cadastral Engine'} · Real-time concordance check</p>
+                <h4>{rep.verdict || (score >= 70 ? 'Nirvivaad (Clear & Authenticated)' : 'Discrepancy / Review Flagged')}</h4>
+                <p>Evaluated using {rep.ai_model_evaluated || 'NIRVIVAAD Intelligence Engine'}</p>
               </div>
             </div>
             <div className="vb-badges">
-              <span className={`pill ${isFake ? 'red' : 'green'}`}>{isFake ? '⚠ Forgery Risk Flagged' : '✓ Stamp & Seal Authenticated'}</span>
-              <span className={`pill ${isDisputed ? 'red' : 'green'}`}>{isDisputed ? '⚠ Vivaadit Jamin' : '✓ Nirvivaad (No Active Injunction)'}</span>
+              <span className={`pill ${isFake ? 'red' : 'green'}`}>{isFake ? '⚠ Forgery Risk Flagged' : '✓ Stamp Verified'}</span>
+              <span className={`pill ${isDisputed ? 'red' : 'green'}`}>{isDisputed ? '⚠ Vivaadit Jamin' : '✓ Nirvivaad (No Dispute)'}</span>
               <span className={`pill ${hasDoubleSelling ? 'red' : 'green'}`}>{hasDoubleSelling ? '⚠ Double Selling Alert' : '✓ Single Title Chain'}</span>
             </div>
-          </div>
-
-          {/* Distinct Two-Column Source Identification (ChatGPT Section 22) */}
-          <div className="verif-sources-grid">
-            <div className="verif-source-card ai-source">
-              <div className="vsc-head">
-                <div className="vsc-title">
-                  <span>🤖</span>
-                  <span>AI Cadastral Extraction (Uploaded Document)</span>
-                </div>
-                <span className="status-pill done" style={{ fontSize: 10 }}>AI Verified</span>
-              </div>
-              <div className="vsc-body">
-                <div className="vsc-row">
-                  <span className="vsc-lbl">Document Type:</span>
-                  <span className="vsc-val">{doc.classified_type || meta.document_type_label || 'Jamin ka Khatihan (RoR)'}</span>
-                </div>
-                <div className="vsc-row">
-                  <span className="vsc-lbl">Extraction Engine:</span>
-                  <span className="vsc-val">NIRVIVAAD Cadastral Vision + OCR</span>
-                </div>
-                <div className="vsc-row">
-                  <span className="vsc-lbl">OCR Confidence:</span>
-                  <span className="vsc-val" style={{ color: '#1B7A42' }}>{Math.round((doc.extracted_intelligence?.ai_confidence || 96.5))}% Match</span>
-                </div>
-                <div className="vsc-row">
-                  <span className="vsc-lbl">File Integrity:</span>
-                  <span className="vsc-val">SHA-256 Validated · Zero Tampering</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="verif-source-card gov-source">
-              <div className="vsc-head">
-                <div className="vsc-title">
-                  <span>🏛️</span>
-                  <span>Official Government Ground Truth (Source of Truth)</span>
-                </div>
-                <span className="status-pill done" style={{ background: '#195B42', color: '#FFF', fontSize: 10 }}>Official Registry</span>
-              </div>
-              <div className="vsc-body">
-                <div className="vsc-row">
-                  <span className="vsc-lbl">Department:</span>
-                  <span className="vsc-val">{govSource.department}</span>
-                </div>
-                <div className="vsc-row">
-                  <span className="vsc-lbl">Government System:</span>
-                  <span className="vsc-val">{govSource.system}</span>
-                </div>
-                <div className="vsc-row">
-                  <span className="vsc-lbl">Registry Status:</span>
-                  <span className="vsc-val" style={{ color: '#146B39' }}>{govSource.status}</span>
-                </div>
-                <div className="vsc-row">
-                  <span className="vsc-lbl">Source Reference:</span>
-                  <span className="vsc-val mono">{govSource.source_reference || `Panji-II / Khata ${meta.khata_no || '47'}`}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 5-Vector Verification Breakdown (ChatGPT Section 8) */}
-          <div className="vector-breakdown-card">
-            <div className="vector-head">
-              <div className="vector-title">📊 Multi-Vector Verification Evidence Breakdown</div>
-              <span className="status-pill done">Overall Evidence Score: {vb.overall_evidence_score || score}%</span>
-            </div>
-            <div className="vector-grid">
-              <div className="vector-metric">
-                <span className="vm-lbl">Identity Match</span>
-                <div className="vm-bar-wrap">
-                  <div className="vm-bar-fill" style={{ width: `${vb.identity_match ?? 100}%` }} />
-                </div>
-                <span className="vm-val">{vb.identity_match ?? 100}%</span>
-              </div>
-              <div className="vector-metric">
-                <span className="vm-lbl">Location Match</span>
-                <div className="vm-bar-wrap">
-                  <div className="vm-bar-fill" style={{ width: `${vb.location_match ?? 100}%` }} />
-                </div>
-                <span className="vm-val">{vb.location_match ?? 100}%</span>
-              </div>
-              <div className="vector-metric">
-                <span className="vm-lbl">Parcel Match</span>
-                <div className="vm-bar-wrap">
-                  <div className="vm-bar-fill" style={{ width: `${vb.parcel_match ?? 97}%` }} />
-                </div>
-                <span className="vm-val">{vb.parcel_match ?? 97}%</span>
-              </div>
-              <div className="vector-metric">
-                <span className="vm-lbl">Area Match</span>
-                <div className="vm-bar-wrap">
-                  <div className="vm-bar-fill" style={{ width: `${vb.area_match ?? 95}%`, background: vb.area_match < 80 ? '#C4881A' : '#2D6A4F' }} />
-                </div>
-                <span className="vm-val">{vb.area_match ?? 95}%</span>
-              </div>
-              <div className="vector-metric">
-                <span className="vm-lbl">Registration Match</span>
-                <div className="vm-bar-wrap">
-                  <div className="vm-bar-fill" style={{ width: `${vb.registration_match ?? 100}%` }} />
-                </div>
-                <span className="vm-val">{vb.registration_match ?? 100}%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Area Discrepancy Callout (ChatGPT Section 14) */}
-          {areaDelta.alert && (
-            <div className="area-discrepancy-banner">
-              <span className="adb-icon">⚠️</span>
-              <div>
-                <b>Area Discrepancy Detected (Flagged for Administrative Review)</b>
-                <p style={{ margin: '3px 0 0' }}>{areaDelta.alert}</p>
-                <small style={{ color: '#82651B', display: 'block', marginTop: 3 }}>
-                  Per NIRVIVAAD Protocol, dimensional variance does not immediately trigger fraud; it is routed for surveyor field inspection and boundary ground-truthing.
-                </small>
-              </div>
-            </div>
-          )}
-
-          {/* 10-POINT CADASTRAL RECORD & TITLE HEALTH CONSOLE (१०-सूत्रीय मूल भूमि अभिलेख एवं सत्यापन) */}
-          <div className="cadastral-10point-console">
-            <div className="c10-head">
-              <div className="c10-title">
-                <span style={{ fontSize: 22 }}>📋</span>
-                <div>
-                  <h4>10-Point Authentic Cadastral Record &amp; Title Verification (१०-सूत्रीय मूल भूमि विवरण)</h4>
-                  <p>Extracted strictly from uploaded deed text &amp; cross-verified against official Revenue Department Panji-II / DILRMP ledgers.</p>
-                </div>
-              </div>
-              <span className="status-pill done" style={{ background: '#195B42', color: '#FFF' }}>
-                ✓ Authentic Cadastral Data
-              </span>
-            </div>
-
-            <div className="c10-grid">
-              {/* 1. Land Classification / Type */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">01 · ज़मीन का प्रकार</span>
-                  <span className="c10-badge green">Verified</span>
-                </div>
-                <span className="c10-lbl">Land Classification / Type</span>
-                <b className="c10-val">{meta.land_classification || doc.extracted_intelligence?.land_classification || 'Agricultural (कृषि भूमि)'}</b>
-                <span className="c10-sub">Usage: Irrigated Agricultural / Rayati Holding</span>
-              </div>
-
-              {/* 2. Registered Owner Name */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">02 · पंजीकृत रैयत</span>
-                  <span className={`c10-badge ${meta.claimed_owner ? 'green' : 'amber'}`}>
-                    {meta.claimed_owner ? 'On Record' : 'Deed Check'}
-                  </span>
-                </div>
-                <span className="c10-lbl">Registered Owner Name (ज़मीन किसके नाम है)</span>
-                <b className="c10-val">{meta.claimed_owner || doc.extracted_intelligence?.claimed_owner || 'Not Specified in Document'}</b>
-                <span className="c10-sub">Registry Match: {govSource.department}</span>
-              </div>
-
-              {/* 3. Khata Number */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">03 · खाता संख्या</span>
-                  <span className={`c10-badge ${meta.khata_no ? 'green' : 'amber'}`}>
-                    {meta.khata_no ? 'RoR Khata' : 'Unspecified'}
-                  </span>
-                </div>
-                <span className="c10-lbl">Khata Number (खाता नं०)</span>
-                <b className="c10-val mono">{meta.khata_no || doc.extracted_intelligence?.khata_no || 'Not Specified in Document'}</b>
-                <span className="c10-sub">Panji-II Jamabandi Ledger Index</span>
-              </div>
-
-              {/* 4. Plot / Khasra Number */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">04 · खेसरा / प्लॉट</span>
-                  <span className={`c10-badge ${meta.khasra_no ? 'green' : 'amber'}`}>
-                    {meta.khasra_no ? 'GIS Plot' : 'Unspecified'}
-                  </span>
-                </div>
-                <span className="c10-lbl">Khasra / Plot Number (खेसरा नं०)</span>
-                <b className="c10-val mono">{meta.khasra_no || doc.extracted_intelligence?.khasra_no || 'Not Specified in Document'}</b>
-                <span className="c10-sub">Cadastral Map Parcel Identification</span>
-              </div>
-
-              {/* 5. Land Area / Rakba */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">05 · कुल रकबा</span>
-                  <span className="c10-badge green">Survey Area</span>
-                </div>
-                <span className="c10-lbl">Land Area / Rakba (ज़मीन कितना है)</span>
-                <b className="c10-val">{(meta.area || doc.extracted_intelligence?.area) ? `${meta.area || doc.extracted_intelligence?.area} Acre(s)` : 'Not Specified in Document'}</b>
-                <span className="c10-sub">Acreage &amp; Decimal Boundary Measure</span>
-              </div>
-
-              {/* 6. Jurisdiction / Location */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">06 · स्थान विवरण</span>
-                  <span className="c10-badge green">Jurisdiction</span>
-                </div>
-                <span className="c10-lbl">State, District, Tehsil/Circle, Village</span>
-                <b className="c10-val" style={{ fontSize: 12 }}>
-                  {[meta.village_mauza || doc.extracted_intelligence?.village, meta.tehsil_circle || doc.extracted_intelligence?.circle, meta.district || doc.extracted_intelligence?.district, meta.state || doc.extracted_intelligence?.state].filter(Boolean).join(' · ') || 'Not Specified in Document'}
-                </b>
-                <span className="c10-sub">Revenue Anchal &amp; Mauza Administrative Circle</span>
-              </div>
-
-              {/* 7. Last Revenue Receipt Status */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">07 · अंतिम लगान रसीद</span>
-                  <span className="c10-badge green">Paid Up-to-date</span>
-                </div>
-                <span className="c10-lbl">Last Revenue Receipt (रसीद कटा है या नहीं)</span>
-                <b className="c10-val" style={{ color: '#105E38' }}>✓ Paid &amp; Valid (लगान चुकता)</b>
-                <span className="c10-sub">Receipt #{doc.extracted_intelligence?.last_revenue_receipt?.receipt_no || (meta.khata_no ? `BR-REC-${meta.khata_no}` : 'BR-REC-ONLINE')} · FY 2024-2025</span>
-              </div>
-
-              {/* 8. Official Registration Status */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">08 · सरकारी निबंधन</span>
-                  <span className="c10-badge green">Registered</span>
-                </div>
-                <span className="c10-lbl">Official Registration (रजिस्ट्रेशन स्थिति)</span>
-                <b className="c10-val" style={{ color: '#105E38' }}>✓ Officially Registered (विधिवत निबंधित)</b>
-                <span className="c10-sub">Deed #{meta.deed_number || doc.extracted_intelligence?.deed_number || 'REG-BIH-DEED'} · Jamabandi Panji-II: Active</span>
-              </div>
-
-              {/* 9. Dispute & Court Cases */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">09 · विवाद एवं न्यायालय वाद</span>
-                  <span className={`c10-badge ${isDisputed ? 'red' : 'green'}`}>
-                    {isDisputed ? 'VIVAADIT' : 'NIRVIVAAD'}
-                  </span>
-                </div>
-                <span className="c10-lbl">Dispute Status (कहीं ज़मीन विवादित तो नहीं?)</span>
-                <b className="c10-val" style={{ color: isDisputed ? '#A12D20' : '#105E38' }}>
-                  {isDisputed ? '⚠️ Vivaadit Jamin (सक्रिय न्यायालयी वाद)' : '✓ निर्विवाद (Nirvivaad - Clear Title)'}
-                </b>
-                <span className="c10-sub">{isDisputed ? (rep.dispute_check?.cases?.join(', ') || 'Civil Court Title Suit Pending') : 'कोई न्यायालयी वाद या स्थगनादेश दर्ज नहीं (No Injunction)'}</span>
-              </div>
-
-              {/* 10. Power of Attorney & Bansawali */}
-              <div className="c10-card">
-                <div className="c10-card-top">
-                  <span className="c10-num">10 · मुख्तारनामा एवं वंशावली</span>
-                  <span className="c10-badge green">3-Tier Lineage</span>
-                </div>
-                <span className="c10-lbl">Power of Attorney &amp; Bansawali Chain</span>
-                <b className="c10-val" style={{ fontSize: 12 }}>
-                  {meta.poa_holder_name ? `PoA Holder: ${meta.poa_holder_name}` : 'Direct Raiyat Ownership (No Intermediary)'}
-                </b>
-                <span className="c10-sub">Lineage: Khatihan RoR Ancestor → Mutated Heirs → Current Claimant</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Side-by-Side Evidence Matrix Table (ChatGPT Section 8, 28 & 29) */}
-          <div style={{ marginTop: 22 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h4 style={{ margin: 0, fontSize: 14.5, color: '#164835' }}>
-                Side-by-Side Evidence Matrix: Uploaded Document vs. Official Registry Ground Truth
-              </h4>
-              <span className="status-pill done" style={{ fontSize: 10.5 }}>✓ Real-time Alignment</span>
-            </div>
-            <p className="sub" style={{ margin: '0 0 10px', fontSize: 11.5 }}>
-              Field-by-field algorithmic cross-referencing comparing extracted deed entities against official Panji-II and RoR cadastral registers.
-            </p>
-
-            <table className="evidence-matrix-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '24%' }}>Cadastral Attribute</th>
-                  <th style={{ width: '28%' }}>Uploaded Document Claim</th>
-                  <th style={{ width: '28%' }}>Official Registry Ground Truth</th>
-                  <th style={{ width: '12%' }}>Match Verdict</th>
-                  <th style={{ width: '8%', textAlign: 'right' }}>Conf.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {matrixRows.map((row, idx) => {
-                  const dec = (row.decision || '').toUpperCase();
-                  const isMatch = dec === 'MATCH';
-                  const isPartial = dec === 'PARTIAL' || dec.includes('VARIANCE');
-                  const isDiscrepancy = dec === 'DISCREPANCY' || dec.includes('REVIEW');
-                  const isMismatch = dec.includes('MISMATCH') || dec.includes('FLAGGED') || dec.includes('DISPUTED');
-                  const pillClass = isMatch ? 'match' : (isPartial || isDiscrepancy) ? 'partial' : isMismatch ? 'mismatch' : 'info';
-
-                  return (
-                    <tr key={idx}>
-                      <td>
-                        <div className="em-attr">
-                          <span style={{ marginRight: 6 }}>{row.icon || '📌'}</span>
-                          {row.field}
-                        </div>
-                        {row.notes && <small style={{ color: '#6A8B7C', fontSize: 10.5, display: 'block' }}>{row.notes}</small>}
-                      </td>
-                      <td>
-                        <span className="em-doc-val">{row.document_value || '—'}</span>
-                        <span className="em-ev-tag">Source: {row.document_evidence || 'OCR Extracted'}</span>
-                      </td>
-                      <td>
-                        <span className="em-gov-val">{row.official_value || '—'}</span>
-                        <span className="em-ev-tag">Registry: {row.official_evidence || 'Gov Panji-II Master'}</span>
-                      </td>
-                      <td>
-                        <span className={`em-pill ${pillClass}`}>
-                          {isMatch ? '✓ MATCH' : isPartial ? '⚠ PARTIAL' : isDiscrepancy ? '⚠ VARIANCE' : isMismatch ? '✕ MISMATCH' : 'ℹ INFO'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#1A4D38', fontFamily: 'monospace' }}>
-                        {row.confidence ? `${row.confidence}%` : '96%'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           </div>
 
           {/* 5-Point Validation Breakdown */}
@@ -1715,17 +1088,39 @@ function ValidationReportModal({ reportData, onClose }) {
             </div>
           </div>
 
+          {/* Side-by-side comparison table */}
+          <h4 style={{ marginTop: 18 }}>Side-by-Side: Uploaded Document vs. Official Registry Ground Truth</h4>
+          <table className="comparison-table">
+            <thead>
+              <tr>
+                <th>Field / Attribute</th>
+                <th>Uploaded Document Claim</th>
+                <th>Official Land Registry Ground Truth</th>
+                <th>Match Verification</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(rep.comparison_table || []).map((row, i) => (
+                <tr key={i}>
+                  <td><b>{row.field}</b></td>
+                  <td className="mono">{row.uploaded}</td>
+                  <td className="mono">{row.registry}</td>
+                  <td>
+                    <span className={`match-badge ${row.match === 'Matched' || row.match === 'Clear (Nirvivaad)' || row.match === 'Nirvivaad (Single Title)' || row.match === 'Valid Format' ? 'match' : row.match?.includes('MISMATCH') || row.match?.includes('Disputed') || row.match?.includes('Flagged') ? 'mismatch' : 'notice'}`}>
+                      {row.match}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
           {reportData.ocr?.text && (
             <div className="ocr-preview-box" style={{ marginTop: 20 }}>
               <b>Extracted OCR Text Preview (Devanagari &amp; English)</b>
               <pre>{reportData.ocr.text}</pre>
             </div>
           )}
-
-          {/* Responsible Legal Disclaimer (ChatGPT Section 23) */}
-          <div className="legal-disclaimer-box">
-            <b>⚖️ Official Due Diligence Notice:</b> NIRVIVAAD cross-references submitted land documents against authoritative state revenue portals (BiharBhumi / DILRMP) and cadastral GIS registries. Verification results certify record consistency with published on-record cadastral ledgers as of retrieval date.
-          </div>
         </div>
 
         <div className="modal-foot">
@@ -1737,8 +1132,7 @@ function ValidationReportModal({ reportData, onClose }) {
 }
 
 // UPLOAD & DIGITIZE VIEW WITH AUTONOMOUS AI/ML CADASTRA-EXTRACTION & ZERO BLOCKING
-function Upload({ refresh, user }) {
-  const [uploadTab, setUploadTab] = useState('provenance');
+function Upload({ refresh }) {
   const [files, setFiles] = useState([]);
   const [m, setM] = useState('');
   const [rejectionAlert, setRejectionAlert] = useState('');
@@ -1748,11 +1142,9 @@ function Upload({ refresh, user }) {
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiExtracted, setAiExtracted] = useState(null);
-  const [previewValidationReport, setPreviewValidationReport] = useState(null);
   const [showFineTune, setShowFineTune] = useState(false);
   const [groundTruthPreview, setGroundTruthPreview] = useState(null);
   const [verificationFlowData, setVerificationFlowData] = useState(null);
-  const [fourQuestions, setFourQuestions] = useState(null);
   const [gisData, setGisData] = useState(null);
   const [showGisViewer, setShowGisViewer] = useState(false);
   const [gisApiKey, setGisApiKey] = useState('');
@@ -1794,7 +1186,7 @@ function Upload({ refresh, user }) {
       if (locs && Object.keys(locs).length) {
         setLocations(locs);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const handleStateChange = e => {
@@ -1850,9 +1242,7 @@ function Upload({ refresh, user }) {
     setRejectionAlert('');
     if (!chosen.length) {
       setAiExtracted(null);
-      setPreviewValidationReport(null);
       setVerificationFlowData(null);
-      setFourQuestions(null);
       return;
     }
     const primary = chosen[0];
@@ -1862,16 +1252,6 @@ function Upload({ refresh, user }) {
       if (res && res.extracted) {
         setAiExtracted(res.extracted);
         if (res.verification_flow) setVerificationFlowData(res.verification_flow);
-        if (res.validation_report) setPreviewValidationReport(res.validation_report);
-        setFourQuestions({
-          q1: res.q1_readability || res.extracted?.q1_readability,
-          q2: res.q2_land_relevance || res.extracted?.q2_land_relevance,
-          q3: res.q3_extraction || res.extracted?.q3_extraction,
-          q4: res.q4_verification || res.validation_report?.q4_verification,
-          golden_axiom: res.golden_axiom || "NOT VERIFIED ≠ NOT LAND | NOT VERIFIED ≠ FAKE",
-          upload_status: res.upload_status || 'ACCEPTED',
-          verification_status: res.verification_status || res.validation_report?.q4_verification?.status || 'VERIFIED'
-        });
         const ext = res.extracted;
         if (ext.document_type) setDocType(ext.document_type);
         if (ext.state) setSelectedState(ext.state);
@@ -1900,9 +1280,7 @@ function Upload({ refresh, user }) {
         setRejectionAlert(errMsg);
         setFiles([]);
         setAiExtracted(null);
-        setPreviewValidationReport(null);
         setVerificationFlowData(null);
-        setFourQuestions(null);
       } else {
         setM(errMsg);
       }
@@ -2190,345 +1568,6 @@ function Upload({ refresh, user }) {
       {/* AI Extracted Land Intelligence Card */}
       {aiExtracted && (
         <div className="ai-extract-card" style={{ marginBottom: 20 }}>
-          {/* 3-State Classification & Evidence-First Architecture Banner (ChatGPT Solution) */}
-          <div className={`three-state-banner ${aiExtracted.classification_state === 'UNKNOWN' ? 'unknown' : aiExtracted.classification_state === 'NON_LAND' ? 'non-land' : 'land'}`}>
-            <div className="tsb-head">
-              <div className="tsb-title">
-                <span style={{ fontSize: 22 }}>
-                  {aiExtracted.classification_state === 'UNKNOWN' ? '⚠️' : aiExtracted.classification_state === 'NON_LAND' ? '🛑' : '🛡️'}
-                </span>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <b style={{ color: '#164835', fontSize: 14 }}>3-STATE CADASTRAL GATEKEEPER &amp; PROVENANCE ENGINE</b>
-                    <span className={`tsb-state-pill ${aiExtracted.classification_state === 'UNKNOWN' ? 'unknown' : aiExtracted.classification_state === 'NON_LAND' ? 'non-land' : 'land'}`}>
-                      STATE: {aiExtracted.classification_state || 'LAND'} ({Math.round((aiExtracted.ai_confidence || 96.5))}% CONFIDENCE)
-                    </span>
-                    {user?.role === 'admin' ? (
-                      <span className="status-pill done" style={{ background: '#113F29', color: '#FFF', fontSize: 10 }}>
-                        ★ REVENUE ADMIN / AMIN ACCESS
-                      </span>
-                    ) : (
-                      <span className="status-pill done" style={{ background: '#195B42', color: '#FFF', fontSize: 10 }}>
-                        CITIZEN SELF-SERVICE PORTAL
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ margin: '3px 0 0', fontSize: 12, color: '#3A6350' }}>
-                    {aiExtracted.classification_state === 'UNKNOWN'
-                      ? '⚠️ Faint / Historical Scan: Routed directly to Human-Assisted Amin Verification Workflow (Zero False Rejection Policy).'
-                      : '✓ High-confidence land signatures verified against State Revenue Department & DILRMP databases.'}
-                  </p>
-                </div>
-              </div>
-              <div className="tsb-hashes">
-                <span className="hash-pill" title="Cryptographic SHA-256 Digest for immutable audit trail">
-                  SHA-256: {aiExtracted.sha256_hash ? aiExtracted.sha256_hash.slice(0, 16) + '…' : 'AUTHENTIC'}
-                </span>
-                <span className="hash-pill" style={{ background: '#E2F0D9', borderColor: '#B5D8A8', color: '#1E5828' }}>
-                  ⚖️ No Evidence, No Value
-                </span>
-              </div>
-            </div>
-
-            {/* Uncertain Fields Warning Banner if any */}
-            {aiExtracted.uncertain_fields && aiExtracted.uncertain_fields.length > 0 && (
-              <div className="uncertain-warning-banner">
-                <span style={{ fontSize: 18 }}>⚠️</span>
-                <div>
-                  <b>Human-Assisted Escalation:</b> The following fields have confidence below 85% or require physical deed confirmation:
-                  <b style={{ marginLeft: 5, color: '#8F3327' }}>{aiExtracted.uncertain_fields.join(', ')}</b>.
-                  <span> Certified Revenue Amin will physically cross-verify these items on-site or via Panji-II ledgers.</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 4-Question Cadastral Trust Console & Golden Axiom Banner */}
-          {fourQuestions && (
-            <div className="four-questions-container">
-              <div className="axiom-banner">
-                <div className="axiom-icon">⚖️</div>
-                <div className="axiom-content">
-                  <div className="axiom-title">CADASTRAL TRUST ARCHITECTURE: GOLDEN AXIOM</div>
-                  <div className="axiom-statement">
-                    <strong>NOT VERIFIED ≠ NOT LAND</strong> &nbsp;|&nbsp; <strong>NOT VERIFIED ≠ FAKE</strong>
-                  </div>
-                  <p className="axiom-note">
-                    <strong>Q2 ka answer Q4 nahi hai.</strong> Land document classification (Q2) evaluates genuine deed formats (Khatihan, Kewala, Rasid, Mutation, PoA).
-                    Government verification (Q4) verifies online record concordance. An offline or un-digitized land record is strictly:
-                    <span className="axiom-tag">LAND_RELATED = YES</span> &nbsp;·&nbsp; <span className="axiom-tag">GOVERNMENT_VERIFIED = UNVERIFIED</span>.
-                  </p>
-                </div>
-              </div>
-
-              <div className="four-questions-grid">
-                {/* Q1: Kya file readable hai? */}
-                <div className={`q-step-card ${fourQuestions.q1?.status === 'PASS' ? 'pass' : 'alert'}`}>
-                  <div className="q-step-header">
-                    <span className="q-badge">QUESTION 1</span>
-                    <span className={`q-status-pill ${fourQuestions.q1?.status === 'PASS' ? 'done' : 'review'}`}>
-                      {fourQuestions.q1?.status === 'PASS' ? '✓ READABLE' : (fourQuestions.q1?.status || 'CHECKED')}
-                    </span>
-                  </div>
-                  <h4 className="q-title">Q1. Kya file readable hai?</h4>
-                  <p className="q-desc">{fourQuestions.q1?.message || 'File scanned & verified for OCR readability.'}</p>
-                  <div className="q-meta">
-                    <span>OCR Extracted:</span>
-                    <b>{fourQuestions.q1?.char_count || 0} characters</b>
-                  </div>
-                </div>
-
-                {/* Q2: Kya document land-related hai? */}
-                <div className={`q-step-card ${(fourQuestions.q2?.status === 'LAND_RELATED' || fourQuestions.q2?.status === 'LAND') ? 'pass' : ((fourQuestions.q2?.status === 'UNKNOWN/REVIEW' || fourQuestions.q2?.status === 'UNKNOWN') ? 'warn' : 'fail')}`}>
-                  <div className="q-step-header">
-                    <span className="q-badge">QUESTION 2</span>
-                    <span className={`q-status-pill ${(fourQuestions.q2?.status === 'LAND_RELATED' || fourQuestions.q2?.status === 'LAND') ? 'done' : ((fourQuestions.q2?.status === 'UNKNOWN/REVIEW' || fourQuestions.q2?.status === 'UNKNOWN') ? 'review' : 'fail')}`}>
-                      {(fourQuestions.q2?.status === 'LAND_RELATED' || fourQuestions.q2?.status === 'LAND') ? '✓ LAND_RELATED (ACCEPTED)' : ((fourQuestions.q2?.status === 'UNKNOWN/REVIEW' || fourQuestions.q2?.status === 'UNKNOWN') ? '⚠️ UNKNOWN/REVIEW (AMIN QUEUE)' : '🛑 NON_LAND (REJECTED)')}
-                    </span>
-                  </div>
-                  <h4 className="q-title">Q2. Kya document land-related hai?</h4>
-                  <p className="q-desc">{fourQuestions.q2?.details || fourQuestions.q2?.reason || 'Cadastral land indicators classified.'}</p>
-                  <div className="q-meta">
-                    <span>Classifier Output:</span>
-                    <b>{fourQuestions.q2?.status || 'LAND_RELATED'} (Zero FAKE labels)</b>
-                  </div>
-                </div>
-
-                {/* Q3: Document ke andar actual data kya likha hai? */}
-                <div className="q-step-card pass">
-                  <div className="q-step-header">
-                    <span className="q-badge">QUESTION 3</span>
-                    <span className="q-status-pill done">✓ EVIDENCE-FIRST</span>
-                  </div>
-                  <h4 className="q-title">Q3. Document ke andar actual data kya likha hai?</h4>
-                  <p className="q-desc">Field-level extraction with provenance &amp; zero hallucination.</p>
-                  <div className="q-specs-mini">
-                    <div><span>Khata:</span> <b>{fourQuestions.q3?.khata_no || typedMeta.khata_no || '—'}</b></div>
-                    <div><span>Khasra:</span> <b>{fourQuestions.q3?.khasra_no || typedMeta.khasra_no || '—'}</b></div>
-                    <div><span>Raiyat:</span> <b>{fourQuestions.q3?.claimed_owner || typedMeta.claimed_owner || '—'}</b></div>
-                    <div><span>Area:</span> <b>{fourQuestions.q3?.area || typedMeta.area || '—'} Acre</b></div>
-                  </div>
-                </div>
-
-                {/* Q4: Kya extracted data authoritative government record se match karta hai? */}
-                <div className={`q-step-card ${fourQuestions.q4?.status === 'VERIFIED' ? 'pass' : (fourQuestions.q4?.status === 'UNVERIFIED' ? 'unverified' : 'warn')}`}>
-                  <div className="q-step-header">
-                    <span className="q-badge">QUESTION 4</span>
-                    <span className={`q-status-pill ${fourQuestions.q4?.status === 'VERIFIED' ? 'done' : (fourQuestions.q4?.status === 'UNVERIFIED' ? 'offline' : 'review')}`}>
-                      {fourQuestions.q4?.status === 'VERIFIED' ? '✓ VERIFIED' : (fourQuestions.q4?.status === 'UNVERIFIED' ? 'ℹ️ UNVERIFIED (OFFLINE)' : '⚠️ ' + (fourQuestions.q4?.status || 'REVIEW'))}
-                    </span>
-                  </div>
-                  <h4 className="q-title">Q4. Kya data authoritative record se match karta hai?</h4>
-                  <p className="q-desc">{fourQuestions.q4?.details || fourQuestions.q4?.message || 'Concordance verified against BiharBhumi / DILRMP database.'}</p>
-                  <div className="q-meta">
-                    <span>Registry Status:</span>
-                    <b>{fourQuestions.q4?.status || 'PENDING'}</b>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* SIH 2026 Navigation Tabs */}
-          <div className="sih-tab-bar">
-            <button
-              type="button"
-              className={`sih-tab-btn ${uploadTab === 'provenance' ? 'active' : ''}`}
-              onClick={() => setUploadTab('provenance')}
-            >
-              📋 Field-by-Field Provenance Matrix
-            </button>
-            <button
-              type="button"
-              className={`sih-tab-btn ${uploadTab === 'sih_specs' ? 'active' : ''}`}
-              onClick={() => setUploadTab('sih_specs')}
-            >
-              🏛️ SIH 2026 15-Point Requirements (Points 7–17)
-            </button>
-            <button
-              type="button"
-              className={`sih-tab-btn ${uploadTab === 'tech_stack' ? 'active' : ''}`}
-              onClick={() => setUploadTab('tech_stack')}
-            >
-              ⚡ Official Tech Stack (OpenCV, GIS, NLP, Cloud)
-            </button>
-          </div>
-
-          {/* TAB 1: FIELD-BY-FIELD PROVENANCE MATRIX (Evidence-First) */}
-          {uploadTab === 'provenance' && (
-            <div className="provenance-table-container" style={{ marginBottom: 16 }}>
-              <table className="provenance-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '22%' }}>Cadastral Attribute</th>
-                    <th style={{ width: '25%' }}>Extracted Value</th>
-                    <th style={{ width: '35%' }}>Deed Source &amp; Evidence Snippet</th>
-                    <th style={{ width: '18%' }}>Confidence / Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ['Jurisdiction (State)', aiExtracted.state || selectedState, aiExtracted.fields_provenance?.state?.evidence || 'Official State Gazette', aiExtracted.fields_provenance?.state?.confidence || 0.98, false],
-                    ['District', aiExtracted.district || selectedDistrict, aiExtracted.fields_provenance?.district?.evidence || 'Deed Header Registry', aiExtracted.fields_provenance?.district?.confidence || 0.96, !aiExtracted.district],
-                    ['Circle / Anchal', aiExtracted.circle || selectedCircle, aiExtracted.fields_provenance?.circle?.evidence || 'Revenue Circle Mention', aiExtracted.fields_provenance?.circle?.confidence || 0.95, !aiExtracted.circle],
-                    ['Mauza (Village)', effectiveVillage || aiExtracted.village, aiExtracted.fields_provenance?.village?.evidence || 'Mauza Survey Boundary', aiExtracted.fields_provenance?.village?.confidence || 0.95, !effectiveVillage && !aiExtracted.village],
-                    ['Khata Number', typedMeta.khata_no || aiExtracted.khata_no, aiExtracted.fields_provenance?.khata_no?.evidence || (aiExtracted.khata_no ? `खाता संख्या: ${aiExtracted.khata_no}` : 'No evidence in deed (null)'), aiExtracted.fields_provenance?.khata_no?.confidence || 0.98, !typedMeta.khata_no && !aiExtracted.khata_no],
-                    ['Khasra / Plot Number', typedMeta.khasra_no || aiExtracted.khasra_no, aiExtracted.fields_provenance?.khasra_no?.evidence || (aiExtracted.khasra_no ? `खेसरा संख्या: ${aiExtracted.khasra_no}` : 'No evidence in deed (null)'), aiExtracted.fields_provenance?.khasra_no?.confidence || 0.98, !typedMeta.khasra_no && !aiExtracted.khasra_no],
-                    ['Raiyat / Claimed Owner', typedMeta.claimed_owner || aiExtracted.claimed_owner, aiExtracted.fields_provenance?.claimed_owner?.evidence || (aiExtracted.claimed_owner ? `रैयत: ${aiExtracted.claimed_owner}` : 'No evidence in deed (null)'), aiExtracted.fields_provenance?.claimed_owner?.confidence || 0.96, !typedMeta.claimed_owner && !aiExtracted.claimed_owner],
-                    ['Surveyed Area', typedMeta.area || aiExtracted.area ? `${typedMeta.area || aiExtracted.area} Acres` : '', aiExtracted.fields_provenance?.area?.evidence || (aiExtracted.area ? `रकबा: ${aiExtracted.area} एकड़` : 'No evidence in deed (null)'), aiExtracted.fields_provenance?.area?.confidence || 0.97, !typedMeta.area && !aiExtracted.area],
-                    ['Registry / Deed No.', typedMeta.deed_number || aiExtracted.deed_number, aiExtracted.fields_provenance?.deed_number?.evidence || (aiExtracted.deed_number ? `दस्तावेज सं: ${aiExtracted.deed_number}` : 'Deed ref from RoR Ledger'), aiExtracted.fields_provenance?.deed_number?.confidence || 0.95, false],
-                    ['Land Classification', landClassification || aiExtracted.classification, 'Categorized via Revenue Rules', 0.96, false]
-                  ].map(([label, val, ev, conf, isUnc], idx) => (
-                    <tr key={idx}>
-                      <td><b>{label}</b></td>
-                      <td>
-                        {val ? (
-                          <span style={{ fontWeight: 700, color: '#164835' }}>{val}</span>
-                        ) : (
-                          <span style={{ color: '#888', fontStyle: 'italic' }}>— null / unverified</span>
-                        )}
-                      </td>
-                      <td>
-                        <code style={{ fontSize: 11, background: '#F4F7F5', padding: '2px 6px', borderRadius: 3, color: '#2B5B44' }}>
-                          {ev}
-                        </code>
-                      </td>
-                      <td>
-                        {isUnc ? (
-                          <span className="prov-badge uncertain">⚠️ Needs Amin Review</span>
-                        ) : val ? (
-                          <span className="prov-badge exact">✓ Verified ({Math.round(conf * 100)}%)</span>
-                        ) : (
-                          <span className="prov-badge missing">✕ No Evidence</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* TAB 2: SIH 2026 15-POINT REQUIREMENTS DECK */}
-          {uploadTab === 'sih_specs' && (
-            <div className="sih-points-deck" style={{ marginBottom: 16 }}>
-              {[
-                ['7', 'Multilingual Recognition', 'OPERATIONAL', 'Supports Hindi, English, Bengali, Marathi, Gujarati + Indic NLP library parsing Devanagari numerals & abbreviations.'],
-                ['8', 'Scanned Document Ingestion', 'OPERATIONAL', 'Autonomous OCR & table layout parsing from scanned PDFs, TIFF, JPG, and historical Khatihan / Kewala / Lagan deeds.'],
-                ['9', 'Intelligent Classification', 'OPERATIONAL', 'Predefined cadastral classification into RoR, Mutation, Sale Deed, Power of Attorney, and Revenue Receipts.'],
-                ['10', 'Automated Validation', 'OPERATIONAL', 'Business rules validation, cross-database matching against Panji-II / DILRMP, and duplicate title detection.'],
-                ['11', 'Confidence Scoring', 'OPERATIONAL', `Field-level scoring with automated flagging of ${aiExtracted.uncertain_fields?.length || 0} uncertain fields for review.`],
-                ['12', 'Human-Assisted Verification', 'ACTIVE', 'Escalation workflow routing ambiguous or faint scans directly to certified Government Amin / Revenue Officer.'],
-                ['13', 'AI Learning Mechanism', 'OPERATIONAL', 'Feedback loops dynamically update OCR boundary detection weights based on Amin verified ground corrections.'],
-                ['14', 'System Integration', 'OPERATIONAL', 'Direct connectivity to State LRMS, DILRMP 3.0 databases, GeoServer GIS maps, and Bhu-Aadhaar 14-digit ULPIN.'],
-                ['15', 'Secure Document Repository', 'OPERATIONAL', `SHA-256 cryptographic verification (${aiExtracted.sha256_hash ? aiExtracted.sha256_hash.slice(0, 12) : 'Tamper-Proof'}...) and immutable audit trails.`],
-                ['16', 'Interactive Dashboards', 'OPERATIONAL', 'Real-time metrics tracking processed documents, extraction accuracy, pending cases, and district heatmap.'],
-                ['17', 'Government APIs & RBAC', 'OPERATIONAL', 'Granular Role-Based Access Control distinguishing Citizen self-service from Revenue Administrator Amin console.']
-              ].map(([num, title, tag, desc]) => (
-                <div className="sih-point-card" key={num}>
-                  <div className="sih-point-head">
-                    <span className="sih-point-num">SIH #{num}</span>
-                    <span className="sih-point-tag">✓ {tag}</span>
-                  </div>
-                  <div className="sih-point-title">{title}</div>
-                  <p className="sih-point-desc">{desc}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* TAB 3: OFFICIAL TECH STACK ARCHITECTURE MATRIX */}
-          {uploadTab === 'tech_stack' && (
-            <div className="tech-stack-matrix" style={{ marginBottom: 16 }}>
-              <div className="tech-stack-group">
-                <h5>👁️ Computer Vision</h5>
-                <div className="tech-badges-list">
-                  <span className="tech-pill">OpenCV 4.10</span>
-                  <span className="tech-pill">Detectron2 Layout</span>
-                  <span className="tech-pill">YOLOv8 Cadastral Boundary</span>
-                </div>
-              </div>
-              <div className="tech-stack-group">
-                <h5>🗺️ GIS Platform</h5>
-                <div className="tech-badges-list">
-                  <span className="tech-pill">GeoServer</span>
-                  <span className="tech-pill">OpenLayers</span>
-                  <span className="tech-pill">Leaflet.js</span>
-                  <span className="tech-pill">QGIS Cadastral</span>
-                </div>
-              </div>
-              <div className="tech-stack-group">
-                <h5>🔌 APIs &amp; Interfaces</h5>
-                <div className="tech-badges-list">
-                  <span className="tech-pill">RESTful FastAPI</span>
-                  <span className="tech-pill">GraphQL Gateway</span>
-                  <span className="tech-pill">National Land API v2</span>
-                </div>
-              </div>
-              <div className="tech-stack-group">
-                <h5>🧠 Natural Language Processing</h5>
-                <div className="tech-badges-list">
-                  <span className="tech-pill">spaCy Multilingual</span>
-                  <span className="tech-pill">Hugging Face Transformers</span>
-                  <span className="tech-pill">Indic NLP Library</span>
-                </div>
-              </div>
-              <div className="tech-stack-group">
-                <h5>☁️ Cloud Infrastructure</h5>
-                <div className="tech-badges-list">
-                  <span className="tech-pill">NIC Cloud (MeghRaj)</span>
-                  <span className="tech-pill">AWS GovCloud</span>
-                  <span className="tech-pill">Azure Government</span>
-                </div>
-              </div>
-              <div className="tech-stack-group">
-                <h5>📊 Data Visualization</h5>
-                <div className="tech-badges-list">
-                  <span className="tech-pill">Power BI</span>
-                  <span className="tech-pill">Apache Superset</span>
-                  <span className="tech-pill">Plotly.js</span>
-                  <span className="tech-pill">Grafana Heatmaps</span>
-                </div>
-              </div>
-              <div className="tech-stack-group">
-                <h5>🔔 Notifications &amp; Alerts</h5>
-                <div className="tech-badges-list">
-                  <span className="tech-pill">CDAC SMS Gateway</span>
-                  <span className="tech-pill">Government Email API</span>
-                  <span className="tech-pill">Push Notifications</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Role-Specific Action Bar (Admin vs Citizen) */}
-          <div className="role-action-bar">
-            <div>
-              <span className="role-badge-tag">
-                {user?.role === 'admin' ? '🛡️ Revenue Officer / Amin Verified Console' : '👤 Citizen Land Record Submission'}
-              </span>
-              <p style={{ margin: '2px 0 0', fontSize: 11.5, color: '#3A6350' }}>
-                {user?.role === 'admin'
-                  ? 'As an authorized Amin, you have authority to approve uncertain fields and commit this record to the Canonical Panji-II ledger.'
-                  : 'Your document will be autonomously checked against the Government Registry and scheduled for Amin verification.'}
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              {user?.role === 'admin' && (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  style={{ background: '#113F29', color: '#FFF', fontWeight: 700 }}
-                  onClick={() => {
-                    send();
-                  }}
-                >
-                  ⚖️ Amin Verification Seal &amp; Commit Record
-                </button>
-              )}
-            </div>
-          </div>
-
           <div className="ai-card-head">
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -2598,32 +1637,8 @@ function Upload({ refresh, user }) {
             )}
           </div>
 
-          {/* Quick Tools: Evidence Matrix Preview, GIS & Government Ground Truth */}
+          {/* Quick Tools: GIS & Government Ground Truth */}
           <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            {previewValidationReport && (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                style={{ background: '#1D5141', color: '#FFF', fontWeight: 600 }}
-                onClick={() => setActiveReportDoc({
-                  document: {
-                    document_id: 'PREVIEW-EXTRACTED',
-                    original_name: files[0]?.name || 'Uploaded Document',
-                    metadata: {
-                      ...aiExtracted,
-                      claimed_owner: typedMeta.claimed_owner || aiExtracted.claimed_owner,
-                      khata_no: typedMeta.khata_no || aiExtracted.khata_no,
-                      khasra_no: typedMeta.khasra_no || aiExtracted.khasra_no,
-                      area: typedMeta.area || aiExtracted.area
-                    },
-                    classified_type: aiExtracted.document_type_label || docType
-                  },
-                  validation_report: previewValidationReport
-                })}
-              >
-                📊 View Side-by-Side Evidence Matrix Preview
-              </button>
-            )}
             <button type="button" className="btn btn-ghost btn-sm" onClick={checkOfficialRegistry}>
               🏛️ Query State Land Portal Ground Truth
             </button>
@@ -3307,25 +2322,21 @@ function HumanVerifyModal({ record, onClose, onVerified }) {
 }
 
 // RECORDS REPOSITORY VIEW (Real Database Records Only)
-function Records({ user }) {
+function Records() {
   const [q, setQ] = useState('');
   const [districtFilter, setDistrictFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [r, setR] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [expandedRow, setExpandedRow] = useState(null);
   const [activeReportDoc, setActiveReportDoc] = useState(null);
   const [verifyModalRecord, setVerifyModalRecord] = useState(null);
 
-  const fetchRecords = () => {
-    setLoading(true);
-    api.records(q).then(data => {
-      setR(data || []);
-    }).catch(() => setR([])).finally(() => setLoading(false));
-  };
-
   useEffect(() => {
-    const id = setTimeout(fetchRecords, 250);
+    const id = setTimeout(() => {
+      api.records(q).then(data => {
+        setR(data || []);
+      }).catch(() => setR([]));
+    }, 250);
     return () => clearTimeout(id);
   }, [q]);
 
@@ -3336,10 +2347,6 @@ function Records({ user }) {
     if (statusFilter !== 'All' && item.status !== statusFilter) return false;
     return true;
   });
-
-  const verifiedCount = r.filter(x => x.status === 'verified').length;
-  const reviewCount = r.filter(x => x.status === 'needs_review' || !x.status).length;
-  const disputedCount = r.filter(x => x.status === 'disputed' || x.status === 'rejected').length;
 
   function exportCsv() {
     if (!filtered.length) {
@@ -3359,7 +2366,7 @@ function Records({ user }) {
       x.ulpin || '—',
       `${x.authenticity_score ?? 90}%`
     ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(',')).join('\n')];
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const link = document.createElement('a');
     link.setAttribute('href', encodeURI(csvContent));
     link.setAttribute('download', `nirvivaad_records_${Date.now()}.csv`);
@@ -3378,55 +2385,20 @@ function Records({ user }) {
     }
   }
 
-  const isAdmin = user?.role === 'admin';
-  const isOfficerOrAdmin = user?.role === 'admin' || user?.role === 'officer' || user?.role === 'verifier';
-
   return (
     <>
       <div className="topbar">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-            <h2>{isAdmin ? 'All Land Records & Cadastral Repository' : 'Records repository'}</h2>
-            {isAdmin && <span className="admin-badge-strip">Admin Access Active</span>}
-          </div>
-          <p className="sub">
-            {isAdmin
-              ? 'Central administrative repository of all digitized, validated, and GIS-linked land records across districts. Real-time audit trails, AI trust provenance, and officer title certification console.'
-              : 'Search the digitized, validated register. Every entry keeps a full audit trail back to its source scan and GIS parcel.'}
-          </p>
+          <h2>Records repository</h2>
+          <p className="sub">Search the digitized, validated register. Every entry keeps a full audit trail back to its source scan and GIS parcel.</p>
         </div>
       </div>
 
-      {isAdmin && (
-        <div className="admin-grid-metrics" style={{ marginBottom: 16 }}>
-          <div className="admin-metric-box">
-            <div className="label">Total Cadastral Records</div>
-            <div className="number">{r.length}</div>
-            <div className="subtext">Ingested in MongoDB Vault</div>
-          </div>
-          <div className="admin-metric-box">
-            <div className="label">Certified (Nirvivaad)</div>
-            <div className="number" style={{ color: '#156B3A' }}>{verifiedCount}</div>
-            <div className="subtext">Title Clear &amp; Unencumbered</div>
-          </div>
-          <div className="admin-metric-box">
-            <div className="label">Pending Verification</div>
-            <div className="number" style={{ color: '#B8720A' }}>{reviewCount}</div>
-            <div className="subtext">Awaiting Officer Sign-Off</div>
-          </div>
-          <div className="admin-metric-box">
-            <div className="label">Disputed / Flagged</div>
-            <div className="number" style={{ color: '#A82D20' }}>{disputedCount}</div>
-            <div className="subtext">Discrepancy / Injunction</div>
-          </div>
-        </div>
-      )}
-
-      <div className="filters" style={{ flexWrap: 'wrap', gap: 10 }}>
+      <div className="filters">
         <input
           type="text"
-          placeholder="Search owner name, khasra no, khata, village, ULPIN…"
-          style={{ minWidth: 260, flex: 1 }}
+          placeholder="Search owner name, khasra no, khata, village…"
+          style={{ minWidth: 240 }}
           value={q}
           onChange={e => setQ(e.target.value)}
         />
@@ -3438,9 +2410,7 @@ function Records({ user }) {
           <option value="All">All statuses</option>
           <option value="verified">Verified (Nirvivaad)</option>
           <option value="needs_review">Pending review</option>
-          <option value="disputed">Disputed / Rejected</option>
         </select>
-        <button className="btn btn-ghost btn-sm" onClick={fetchRecords} title="Refresh records from database">↻ Refresh</button>
         <button className="btn btn-ghost btn-sm" onClick={exportCsv}>Export CSV</button>
       </div>
 
@@ -3449,165 +2419,73 @@ function Records({ user }) {
           <thead>
             <tr>
               <th style={{ paddingLeft: 20 }}>Khata / Khasra</th>
-              <th>Bhu-Aadhaar (ULPIN)</th>
-              <th>Recorded Raiyat (Owner)</th>
-              <th>Village / District</th>
+              <th>Owner</th>
+              <th>Village</th>
+              <th>District</th>
               <th>Area</th>
-              <th>AI Trust &amp; Confidence</th>
               <th>Status</th>
-              <th style={{ textAlign: 'right', paddingRight: 20 }}>Actions</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((item, i) => {
-              const trustScore = item.authenticity_score ?? 96;
-              const isDone = item.status === 'verified';
-              const isDisputed = item.status === 'disputed' || item.status === 'rejected';
-              return (
-                <React.Fragment key={item.record_id || i}>
-                  <tr>
-                    <td className="idnum" style={{ paddingLeft: 20 }}>
-                      <b>{item.khata_no}</b> / {item.khasra_no}
-                    </td>
-                    <td>
-                      {item.ulpin ? (
-                        <span className="mono" style={{ fontSize: 11, background: '#EAF3ED', color: '#1B4D3E', padding: '3px 7px', borderRadius: 4, fontWeight: 700 }}>
-                          {item.ulpin}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 11, color: '#888' }}>Auto-Generated</span>
-                      )}
-                    </td>
-                    <td className="owner" style={{ fontWeight: 600 }}>{item.owner}</td>
-                    <td>{item.village}, {item.district}</td>
-                    <td className="mono">{item.area ? `${item.area} ac` : '—'}</td>
-                    <td>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          background: trustScore >= 90 ? '#E6F4EA' : (trustScore >= 75 ? '#FEF7E0' : '#FCE8E6'),
-                          color: trustScore >= 90 ? '#137333' : (trustScore >= 75 ? '#B06000' : '#C5221F')
-                        }}>
-                          {trustScore}% Trust
-                        </span>
-                        {trustScore >= 85 && <span title="Passes 85% Confidence Cutoff" style={{ color: '#137333', fontSize: 12 }}>✓</span>}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${isDone ? 'done' : (isDisputed ? 'dispute' : 'review')}`}>
-                        {isDone ? 'Verified Nirvivaad' : (isDisputed ? 'Disputed / Injunction' : 'Pending Review')}
-                      </span>
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right', paddingRight: 20 }}>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ marginRight: 6 }}
-                        onClick={() => setExpandedRow(expandedRow === i ? null : i)}
-                      >
-                        {expandedRow === i ? 'Hide trail' : 'Audit trail'}
+            {filtered.map((item, i) => (
+              <React.Fragment key={item.record_id || i}>
+                <tr>
+                  <td className="idnum" style={{ paddingLeft: 20 }}>{item.khata_no} / {item.khasra_no}</td>
+                  <td className="owner">{item.owner}</td>
+                  <td>{item.village}</td>
+                  <td>{item.district}</td>
+                  <td className="mono">{item.area ? `${item.area} ac` : '—'}</td>
+                  <td>
+                    <span className={`status-pill ${item.status === 'verified' ? 'done' : 'review'}`}>
+                      {item.status === 'verified' ? 'verified' : 'pending review'}
+                    </span>
+                  </td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ marginRight: 6 }}
+                      onClick={() => setExpandedRow(expandedRow === i ? null : i)}
+                    >
+                      Audit trail
+                    </button>
+                    {item.document_id && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => openDocReport(item.document_id)}>
+                        Report
                       </button>
-                      {item.document_id && (
-                        <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => openDocReport(item.document_id)}>
-                          Report
-                        </button>
-                      )}
-                      {isOfficerOrAdmin && (
-                        <button
-                          className="btn btn-sm"
-                          style={{
-                            background: isDone ? '#E2EDE6' : '#183C2F',
-                            color: isDone ? '#183C2F' : '#FFF',
-                            fontWeight: 600,
-                            padding: '4px 10px'
-                          }}
-                          onClick={() => setVerifyModalRecord(item)}
-                          title="Open Officer Verification &amp; Certification Console"
-                        >
-                          {isDone ? 'Re-Inspect' : 'Review &amp; Certify'}
-                        </button>
+                    )}
+                  </td>
+                </tr>
+                {expandedRow === i && (
+                  <tr className="row-expand">
+                    <td colSpan="7" style={{ padding: '12px 20px' }}>
+                      <b>Audit Trail &amp; Verification Chain:</b>
+                      <ul className="audit-trail" style={{ margin: '6px 0 0' }}>
+                        {(item.audit_trail || [
+                          `Record ingested into MongoDB repository — Khata ${item.khata_no} / Plot ${item.khasra_no}`,
+                          `Automated cross-check with official cadastral registry: Authenticity score ${item.authenticity_score ?? 90}%`,
+                          `Validated and logged under NIRVIVAAD audit log`
+                        ]).map((t, idx) => (
+                          <li key={idx}>{t}</li>
+                        ))}
+                      </ul>
+                      {item.ulpin && (
+                        <div style={{ marginTop: 8 }}>
+                          <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Bhu-Aadhaar ULPIN: </span>
+                          <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--ledger)' }}>{item.ulpin}</span>
+                        </div>
                       )}
                     </td>
                   </tr>
-                  {expandedRow === i && (
-                    <tr className="row-expand">
-                      <td colSpan="8" style={{ padding: '16px 20px', background: '#F8FBF9' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
-                          <div>
-                            <b style={{ color: '#1A3E31', fontSize: 13 }}>📜 Immutable Audit Trail &amp; Verification Chain:</b>
-                            <ul className="audit-trail" style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12 }}>
-                              {(item.audit_trail || [
-                                `Record ingested into MongoDB repository — Khata ${item.khata_no} / Plot ${item.khasra_no}`,
-                                `Layer 1: OpenCV Sauvola binarization and Hough deskewing (+/- 0.2°) completed`,
-                                `Layer 2: Multi-Engine OCR (PaddleOCR v4 + Tesseract LSTM) extracted entity provenance`,
-                                `Layer 3: Bounding boxes verified against official state land registry ground truth`,
-                                `Authenticity score evaluated at ${trustScore}% — ${trustScore >= 85 ? 'Exceeds 85% confidence cut-off' : 'Flagged for human triage'}`
-                              ]).map((t, idx) => (
-                                <li key={idx} style={{ marginBottom: 4 }}>{t}</li>
-                              ))}
-                            </ul>
-                            {item.ulpin && (
-                              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Bhu-Aadhaar ULPIN: </span>
-                                <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--ledger)' }}>{item.ulpin}</span>
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ background: '#FFF', border: '1px solid #D5E1D8', borderRadius: 6, padding: 12 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#1A3E31', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-                              <span>🛡️ Trust Layer &amp; Provenance</span>
-                              <span style={{ fontSize: 11, color: '#137333', background: '#EAF6EE', padding: '2px 6px', borderRadius: 4 }}>
-                                Reason: {item.reason_code || (isDone ? 'VALIDATED_OK' : 'CONFIDENCE_BELOW_THRESHOLD')}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: 11.5, color: '#557062', lineHeight: 1.5 }}>
-                              <div><b>• Optical Restorer:</b> OpenCV 4.x Adaptive Binarization (Otsu &amp; Sauvola)</div>
-                              <div><b>• Multi-Engine OCR:</b> PaddleOCR v4 + Tesseract Indic LSTM + TrOCR Transformer</div>
-                              <div><b>• Coordinate Provenance:</b> Bounding Box coordinates tracked on source scan</div>
-                              <div><b>• Cadastral Cross-Check:</b> Verified against BiharBhumi / UP Bhulekh RoR registry</div>
-                            </div>
-                            {isOfficerOrAdmin && (
-                              <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px dashed #D5E1D8' }}>
-                                <button
-                                  className="btn btn-sm btn-primary"
-                                  style={{ width: '100%', fontSize: 11 }}
-                                  onClick={() => setVerifyModalRecord(item)}
-                                >
-                                  Open Amin Certification Seal Console →
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
+                )}
+              </React.Fragment>
+            ))}
           </tbody>
         </table>
-        {!filtered.length && (
-          <p className="empty" style={{ padding: 20 }}>
-            {loading ? 'Fetching cadastral records from database...' : 'No records found in database repository. Upload and digitize records to view them here.'}
-          </p>
-        )}
+        {!filtered.length && <p className="empty" style={{ padding: 20 }}>No records found in database repository. Upload and digitize records to view them here.</p>}
       </div>
 
       <ValidationReportModal reportData={activeReportDoc} onClose={() => setActiveReportDoc(null)} />
-
-      {verifyModalRecord && (
-        <HumanVerifyModal
-          record={verifyModalRecord}
-          onClose={() => setVerifyModalRecord(null)}
-          onVerified={(updated) => {
-            setVerifyModalRecord(null);
-            setR(prev => prev.map(x => (x.record_id === updated.record_id ? { ...x, ...updated } : x)));
-          }}
-        />
-      )}
     </>
   );
 }
@@ -3620,7 +2498,7 @@ function Integrations() {
   const [gisInput, setGisInput] = useState({ state: 'Bihar', district: 'Muzaffarpur', village: 'Kanti', khasra: '214/2' });
 
   useEffect(() => {
-    api.integrations().then(setIntegStatus).catch(() => {});
+    api.integrations().then(setIntegStatus).catch(() => { });
   }, []);
 
   async function loadGisExplorer() {
@@ -3768,224 +2646,30 @@ function Integrations() {
 }
 
 // REPORTS VIEW (Real Data Only, Zero Mock)
-function Reports({ user }) {
+function Reports() {
   const [progress, setProgress] = useState([]);
   const [errors, setErrors] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const loadReports = () => {
-    setLoading(true);
-    Promise.all([
-      api.progress().catch(() => []),
-      api.errors().catch(() => [])
-    ]).then(([p, e]) => {
-      setProgress(p || []);
-      setErrors(e || []);
-    }).finally(() => setLoading(false));
-  };
 
   useEffect(() => {
-    loadReports();
+    api.progress().then(p => setProgress(p || [])).catch(() => setProgress([]));
+    api.errors().then(e => setErrors(e || [])).catch(() => setErrors([]));
   }, []);
 
-  const totalProcessed = progress.reduce((acc, d) => acc + (d.records || 0), 0) || 48;
-  const maxP = Math.max(...progress.map(d => d.records || 0), 10);
-  const maxE = Math.max(...errors.map(d => d.count || 0), 10);
-  const isAdmin = user?.role === 'admin';
+  const maxP = Math.max(...progress.map(d => d.records), 10);
+  const maxE = Math.max(...errors.map(d => d.count), 10);
 
   return (
     <>
       <div className="topbar">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-            <h2>System Analytics &amp; Sovereign Land Intelligence</h2>
-            {isAdmin && <span className="admin-badge-strip">Admin Oversight Active</span>}
-          </div>
-          <p className="sub">
-            Real-time pipeline telemetry, 3-layer OCR restoration throughput, Trust Layer anti-hallucination tracking, and national cadastral gateway health.
-          </p>
+          <h2>Reports &amp; Analytics</h2>
+          <p className="sub">Real-time throughput metrics and validation error analytics from active database records.</p>
         </div>
       </div>
 
-      {/* Top 4 Sovereign Land Intelligence KPIs */}
-      <div className="admin-grid-metrics" style={{ marginBottom: 20 }}>
-        <div className="admin-metric-box">
-          <div className="label">Total Deeds Processed</div>
-          <div className="number">{totalProcessed}</div>
-          <div className="subtext">Active Database Records</div>
-        </div>
-        <div className="admin-metric-box">
-          <div className="label">Mean AI OCR Confidence</div>
-          <div className="number" style={{ color: '#156B3A' }}>96.8%</div>
-          <div className="subtext">Strict 85% Cut-off Enforced</div>
-        </div>
-        <div className="admin-metric-box">
-          <div className="label">Straight-Through Auto-Pass</div>
-          <div className="number" style={{ color: '#156B3A' }}>88.2%</div>
-          <div className="subtext">Zero-Dispute Nirvivaad Titles</div>
-        </div>
-        <div className="admin-metric-box">
-          <div className="label">Human-in-the-Loop Triage</div>
-          <div className="number" style={{ color: '#B8720A' }}>11.8%</div>
-          <div className="subtext">Routed to Amin / CO Console</div>
-        </div>
-      </div>
-
-      {/* SECTION 1: QUESTION 5 IMPLEMENTATION - 3-LAYER OCR ARCHITECTURE */}
-      <div className="panel" style={{ marginBottom: 20 }}>
-        <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>🔍</span> 3-Layer OCR &amp; Optical Restoration Pipeline (Old &amp; Faded Documents)
-            </h4>
-            <span style={{ fontSize: 11.5, color: '#557062' }}>
-              Solving low-contrast 50+ year old stamp papers, ink bleed-through, and Patwari handwriting
-            </span>
-          </div>
-          <span className="live-dot">● Multi-Engine Active</span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 16 }}>
-          {/* Layer 1: Pre-processing */}
-          <div style={{ background: '#F6FAF7', border: '1px solid #CCE1D4', borderRadius: 8, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ background: '#183C2F', color: '#FFF', width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>1</span>
-              <b style={{ color: '#183C2F', fontSize: 13 }}>Pre-Processing &amp; Restoration</b>
-            </div>
-            <div style={{ fontSize: 11, color: '#6A8477', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>OpenCV Computer Vision Engine</div>
-            <ul style={{ fontSize: 12, color: '#2C493B', lineHeight: 1.5, margin: 0, paddingLeft: 16 }}>
-              <li><b>Sauvola &amp; Otsu Binarization:</b> Isolates faded handwritten text from aged yellow paper &amp; moisture stains.</li>
-              <li><b>Hough Transform Deskewing:</b> Corrects scanning tilt up to ±15° with sub-degree (±0.2°) precision alignment.</li>
-              <li><b>Bilateral Denoising + CLAHE:</b> Contrast-Limited Adaptive Histogram Equalization sharpens washed-out ink strokes.</li>
-            </ul>
-            <div style={{ marginTop: 12, padding: '6px 10px', background: '#E7F2EB', borderRadius: 4, fontSize: 11, color: '#156B3A', fontWeight: 600 }}>
-              ✓ 100% Ingested Scans Pre-Processed (+34.2% OCR Boost)
-            </div>
-          </div>
-
-          {/* Layer 2: Multi-Engine OCR */}
-          <div style={{ background: '#F6FAF7', border: '1px solid #CCE1D4', borderRadius: 8, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ background: '#183C2F', color: '#FFF', width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>2</span>
-              <b style={{ color: '#183C2F', fontSize: 13 }}>Multi-Engine Ensemble OCR</b>
-            </div>
-            <div style={{ fontSize: 11, color: '#6A8477', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Hybrid Deep Learning Stack</div>
-            <ul style={{ fontSize: 12, color: '#2C493B', lineHeight: 1.5, margin: 0, paddingLeft: 16 }}>
-              <li><b>PaddleOCR v4 + Tesseract Indic:</b> Primary printed deed engine for Hindi, Maithili, Bhojpuri &amp; English legal texts.</li>
-              <li><b>Fine-Tuned TrOCR:</b> Transformer-based OCR specialized for cursive revenue stamps, Patwari margin notes &amp; Khatiyan logs.</li>
-              <li><b>Poly-Lingual Lexicon:</b> Revenue circle dictionary matching against Jamabandi Panji-II and Bhu-Lagaan vocabulary.</li>
-            </ul>
-            <div style={{ marginTop: 12, padding: '6px 10px', background: '#E7F2EB', borderRadius: 4, fontSize: 11, color: '#156B3A', fontWeight: 600 }}>
-              ✓ 98.4% Ensemble Recognition Rate (Printed + Cursive)
-            </div>
-          </div>
-
-          {/* Layer 3: Human-in-the-Loop */}
-          <div style={{ background: '#F6FAF7', border: '1px solid #CCE1D4', borderRadius: 8, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ background: '#183C2F', color: '#FFF', width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>3</span>
-              <b style={{ color: '#183C2F', fontSize: 13 }}>Human-in-the-Loop Triage</b>
-            </div>
-            <div style={{ fontSize: 11, color: '#6A8477', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Revenue Officer Amin Review</div>
-            <ul style={{ fontSize: 12, color: '#2C493B', lineHeight: 1.5, margin: 0, paddingLeft: 16 }}>
-              <li><b>85% Confidence Cut-Off:</b> Any word or field below 85% confidence is never hallucinated or auto-committed.</li>
-              <li><b>Bounding Box Highlighting:</b> Exact pixel coordinates ([ymin, xmin, ymax, xmax]) visually flagged on deed scan.</li>
-              <li><b>Amin Digital Certification:</b> Revenue Amin reviews the flagged token in the console and issues an authentic digital stamp.</li>
-            </ul>
-            <div style={{ marginTop: 12, padding: '6px 10px', background: '#FEF4E6', borderRadius: 4, fontSize: 11, color: '#B06000', fontWeight: 600 }}>
-              ⚠️ Zero Hallucination Guarantee · 11.8% Triaged to Amin
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 2: QUESTION 6 IMPLEMENTATION - TRUST LAYER & REASON CODES */}
-      <div className="panel" style={{ marginBottom: 20 }}>
-        <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>🛡️</span> Trust Layer &amp; Anti-Hallucination Anomaly Detection
-            </h4>
-            <span style={{ fontSize: 11.5, color: '#557062' }}>
-              How NIRVIVAAD detects wrong extractions, AI hallucinations, and deed discrepancies
-            </span>
-          </div>
-          <span className="live-dot">● Zero Blind Trust Policy</span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 20, marginTop: 16 }}>
-          {/* Trust Layer 4 Pillars */}
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ background: '#FFF', border: '1px solid #D5E1D8', borderRadius: 6, padding: 12 }}>
-                <b style={{ color: '#183C2F', fontSize: 12.5, display: 'block', marginBottom: 4 }}>1. Bounding Boxes (bbox)</b>
-                <p style={{ fontSize: 11.5, color: '#557062', margin: 0, lineHeight: 1.45 }}>
-                  Every extracted entity (Owner, Khata, Khasra, Area) maintains an immutable pixel coordinate bounding box on the original document. No orphan data is ever stored.
-                </p>
-              </div>
-              <div style={{ background: '#FFF', border: '1px solid #D5E1D8', borderRadius: 6, padding: 12 }}>
-                <b style={{ color: '#183C2F', fontSize: 12.5, display: 'block', marginBottom: 4 }}>2. Strict 85% Confidence</b>
-                <p style={{ fontSize: 11.5, color: '#557062', margin: 0, lineHeight: 1.45 }}>
-                  Per-field probabilistic confidence scoring. If a character is doubtful (&lt;85%), it is immediately routed to the Human Triage console with a clear warning flag.
-                </p>
-              </div>
-              <div style={{ background: '#FFF', border: '1px solid #D5E1D8', borderRadius: 6, padding: 12 }}>
-                <b style={{ color: '#183C2F', fontSize: 12.5, display: 'block', marginBottom: 4 }}>3. Registry Cross-Validation</b>
-                <p style={{ fontSize: 11.5, color: '#557062', margin: 0, lineHeight: 1.45 }}>
-                  Extracted plot and owner data are cross-checked in real-time against state Bhulekh/DILRMP cadastral ground truth using fuzzy Levenshtein and spatial boundary checks.
-                </p>
-              </div>
-              <div style={{ background: '#FFF', border: '1px solid #D5E1D8', borderRadius: 6, padding: 12 }}>
-                <b style={{ color: '#183C2F', fontSize: 12.5, display: 'block', marginBottom: 4 }}>4. Standardized Reason Codes</b>
-                <p style={{ fontSize: 11.5, color: '#557062', margin: 0, lineHeight: 1.45 }}>
-                  System assigns explicit, deterministic Reason Codes to any flagged document so officers instantly pinpoint the anomaly without guesswork.
-                </p>
-              </div>
-            </div>
-
-            {/* Standardized Reason Codes Table */}
-            <div style={{ marginTop: 14, background: '#F8FBF9', border: '1px solid #D5E1D8', borderRadius: 6, padding: 12 }}>
-              <b style={{ fontSize: 12, color: '#183C2F', display: 'block', marginBottom: 8 }}>Standardized Anomaly Reason Codes:</b>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
-                <div><code>CONFIDENCE_BELOW_THRESHOLD</code>: OCR confidence &lt; 85%</div>
-                <div><code>KHATA_REGISTRY_MISMATCH</code>: Khata differs from circle record</div>
-                <div><code>OWNER_NAME_FUZZY_MISMATCH</code>: Owner name mismatch with Raiyat</div>
-                <div><code>AREA_DISCREPANCY_FLAG</code>: Deed area exceeds cadastral plot</div>
-                <div><code>KHASRA_FORMAT_ANOMALY</code>: Sub-plot / Bata format anomaly</div>
-                <div><code>ACTIVE_COURT_STAY_FLAG</code>: Civil stay or Section 144 injunction</div>
-                <div><code>UNVERIFIED_POA_SUBMISSION</code>: PoA without registered deed chain</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Reason Code Distribution Bar Chart */}
-          <div style={{ background: '#FFF', border: '1px solid #D5E1D8', borderRadius: 6, padding: 14 }}>
-            <b style={{ color: '#183C2F', fontSize: 13, display: 'block', marginBottom: 4 }}>Active Anomaly &amp; Reason Code Distribution</b>
-            <span style={{ fontSize: 11, color: '#6A8477', display: 'block', marginBottom: 12 }}>Live aggregated counts from database validation telemetry</span>
-            {errors.length > 0 ? (
-              <div className="barchart" style={{ height: 180 }}>
-                {errors.map(d => (
-                  <div className="col" key={d.reason_code} title={`${d.reason_code}: ${d.count} occurrences`}>
-                    <div className="bval">{d.count}</div>
-                    <div className="bar err" style={{ height: `${Math.max(12, (d.count / maxE) * 120)}px` }} />
-                    <div className="blabel" style={{ fontSize: 9.5 }}>{d.reason_code.replace(/_/g, ' ')}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="empty">No validation errors registered. All processed records are error-free.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 3: REAL-TIME THROUGHPUT & DISTRICT DIGITIZATION PROGRESS */}
       <div className="two-col">
         <div className="panel">
-          <div className="panel-head">
-            <h4>Documents Processed by District (Real Database)</h4>
-            <span className="live-dot">● Ingestion Live</span>
-          </div>
+          <div className="panel-head"><h4>Documents Processed by District (Real Database)</h4></div>
           {progress.length > 0 ? (
             <div className="barchart">
               {progress.map(d => (
@@ -4002,44 +2686,23 @@ function Reports({ user }) {
         </div>
 
         <div className="panel">
-          <div className="panel-head">
-            <h4>🏛️ Connected Revenue Gateways &amp; Sovereign Stack</h4>
-            <span className="live-dot">● Multi-State Online</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F8FBF9', border: '1px solid #D5E1D8', borderRadius: 6 }}>
-              <div>
-                <b style={{ fontSize: 12.5, color: '#183C2F' }}>BiharBhumi RoR &amp; Jamabandi Gateway</b>
-                <div style={{ fontSize: 11, color: '#6A8477' }}>DoLR Department of Land Records &amp; Survey</div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#156B3A', background: '#D8F2E1', padding: '3px 8px', borderRadius: 4 }}>● Live (0.4s)</span>
+          <div className="panel-head"><h4>Error Statistics &amp; Flags</h4></div>
+          {errors.length > 0 ? (
+            <div className="barchart">
+              {errors.map(d => (
+                <div className="col" key={d.reason_code}>
+                  <div className="bval">{d.count}</div>
+                  <div className="bar err" style={{ height: `${Math.max(10, (d.count / maxE) * 140)}px` }} />
+                  <div className="blabel">{d.reason_code}</div>
+                </div>
+              ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F8FBF9', border: '1px solid #D5E1D8', borderRadius: 6 }}>
-              <div>
-                <b style={{ fontSize: 12.5, color: '#183C2F' }}>UP Bhulekh Registry (BOR UP)</b>
-                <div style={{ fontSize: 11, color: '#6A8477' }}>Khatauni &amp; Gata Master Database</div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#156B3A', background: '#D8F2E1', padding: '3px 8px', borderRadius: 4 }}>● Live (0.3s)</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F8FBF9', border: '1px solid #D5E1D8', borderRadius: 6 }}>
-              <div>
-                <b style={{ fontSize: 12.5, color: '#183C2F' }}>DILRMP Central Cadastral Server</b>
-                <div style={{ fontSize: 11, color: '#6A8477' }}>Ministry of Rural Development, Govt of India</div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#156B3A', background: '#D8F2E1', padding: '3px 8px', borderRadius: 4 }}>● Operational</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F8FBF9', border: '1px solid #D5E1D8', borderRadius: 6 }}>
-              <div>
-                <b style={{ fontSize: 12.5, color: '#183C2F' }}>Cadastral GIS Engine (WGS84)</b>
-                <div style={{ fontSize: 11, color: '#6A8477' }}>14-digit Bhu-Aadhaar ULPIN Generator</div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#156B3A', background: '#D8F2E1', padding: '3px 8px', borderRadius: 4 }}>● Active (0.1s)</span>
-            </div>
-          </div>
+          ) : (
+            <p className="empty">No validation errors registered. All processed records are error-free.</p>
+          )}
         </div>
       </div>
 
-      {/* State-wise & District-wise Progress Detail */}
       <div className="panel" style={{ marginTop: 16 }}>
         <div className="panel-head"><h4>State-wise &amp; District-wise Progress Detail</h4></div>
         {progress.length > 0 ? (
@@ -4079,7 +2742,7 @@ function Reports({ user }) {
 }
 
 // AUTHENTIC ENTERPRISE ADMIN DASHBOARD & USER CONTROL CENTER
-function Admin({ user, goView }) {
+function Admin() {
   const [users, setUsers] = useState([]);
   const [overview, setOverview] = useState(null);
   const [search, setSearch] = useState('');
@@ -4168,43 +2831,6 @@ function Admin({ user, goView }) {
       </div>
 
       {actionMsg && <div className="notice notice-good" style={{ margin: '0 0 16px' }}>{actionMsg}</div>}
-
-      {/* Quick Navigation into Specialized Admin Modules */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
-        <div
-          style={{ background: '#F8FBF9', border: '1.5px solid #CCDCD1', borderRadius: 8, padding: '14px 18px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s' }}
-          onClick={() => goView && goView('records')}
-          title="Open All Land Records Repository"
-        >
-          <div>
-            <b style={{ color: '#183C2F', fontSize: 13, display: 'block' }}>📁 All Land Records Repository</b>
-            <span style={{ fontSize: 11.5, color: '#557062' }}>Inspect all cadastral entries, ULPIN &amp; audit trails</span>
-          </div>
-          <span style={{ fontSize: 18, color: '#183C2F' }}>→</span>
-        </div>
-        <div
-          style={{ background: '#F8FBF9', border: '1.5px solid #CCDCD1', borderRadius: 8, padding: '14px 18px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s' }}
-          onClick={() => goView && goView('reports')}
-          title="Open System Analytics &amp; 3-Layer OCR Engine"
-        >
-          <div>
-            <b style={{ color: '#183C2F', fontSize: 13, display: 'block' }}>📊 System Analytics &amp; 3-Layer OCR</b>
-            <span style={{ fontSize: 11.5, color: '#557062' }}>Restoration metrics, Trust Layer &amp; Reason Codes</span>
-          </div>
-          <span style={{ fontSize: 18, color: '#183C2F' }}>→</span>
-        </div>
-        <div
-          style={{ background: '#F8FBF9', border: '1.5px solid #CCDCD1', borderRadius: 8, padding: '14px 18px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s' }}
-          onClick={() => goView && goView('verify')}
-          title="Open Title Review &amp; Verification Queue"
-        >
-          <div>
-            <b style={{ color: '#183C2F', fontSize: 13, display: 'block' }}>⚖️ Verification &amp; Title Review</b>
-            <span style={{ fontSize: 11.5, color: '#557062' }}>Revenue Amin approval &amp; ground-truth matching</span>
-          </div>
-          <span style={{ fontSize: 18, color: '#183C2F' }}>→</span>
-        </div>
-      </div>
 
       {/* Top Administrative KPI Cards */}
       <div className="admin-grid-metrics">
@@ -4462,37 +3088,15 @@ function App() {
     if (localStorage.getItem('nirvivaad_token')) {
       api.me()
         .then(x => {
-          const u = x.user;
-          setUser(u);
+          setUser(x.user);
           const h = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-          if (u.role === 'admin') {
-            if (!['admin', 'verify', 'records', 'reports'].includes(h)) {
-              setViewWithHash('admin');
-            }
-          } else {
-            if (!['dashboard', 'upload', 'records', 'reports'].includes(h)) {
-              setViewWithHash('dashboard');
-            }
+          if (['home', 'about', 'auth', ''].includes(h)) {
+            setViewWithHash(x.user.role === 'admin' ? 'admin' : 'dashboard');
           }
         })
         .catch(() => localStorage.removeItem('nirvivaad_token'));
     }
   }, []);
-
-  // Enforce role-appropriate views
-  useEffect(() => {
-    if (user) {
-      if (user.role === 'admin') {
-        if (!['admin', 'verify', 'records', 'reports'].includes(v)) {
-          setViewWithHash('admin');
-        }
-      } else {
-        if (!['dashboard', 'upload', 'records', 'reports'].includes(v)) {
-          setViewWithHash('dashboard');
-        }
-      }
-    }
-  }, [user, v]);
 
   useEffect(() => {
     if (user) {
@@ -4512,7 +3116,7 @@ function App() {
     return page === 'about' ? (
       <About go={setPageWithHash} />
     ) : page === 'auth' ? (
-      <Auth done={(u, target) => { setUser(u); setViewWithHash(target || (u.role === 'admin' ? 'admin' : 'dashboard')); }} go={setPageWithHash} />
+      <Auth done={u => { setUser(u); setViewWithHash(u.role === 'admin' ? 'admin' : 'dashboard'); }} go={setPageWithHash} />
     ) : (
       <Landing go={setPageWithHash} />
     );
@@ -4539,43 +3143,26 @@ function App() {
   const body = v === 'dashboard' ? (
     <Dashboard d={d} goView={setViewWithHash} />
   ) : v === 'upload' ? (
-    <Upload refresh={refresh} user={user} />
+    <Upload refresh={refresh} />
   ) : v === 'verify' ? (
-    <Verify refresh={refresh} user={user} />
+    <Verify refresh={refresh} />
   ) : v === 'records' ? (
-    <Records user={user} />
+    <Records />
+
   ) : v === 'reports' ? (
-    <Reports user={user} />
+    <Reports />
   ) : (
-    <Admin user={user} goView={setViewWithHash} />
+    <Admin />
   );
 
   return (
     <div className="app react-app">
       <aside className="sidebar">
         <div className="brand">
-          <div
-            className="brand-mark"
-            style={{
-              width: '40px',
-              height: '40px',
-              minWidth: '40px',
-              background: '#ffffff',
-              borderRadius: '8px',
-              padding: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              border: '1.5px solid #9FB09F',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
-            }}
-          >
-            <img
-              src="/logo.png"
-              alt="NIRVIVAAD Logo"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
+          <div className="brand-mark">
+            <svg viewBox="0 0 34 34" fill="none">
+              <path d="M4 30 L17 4 L30 30 M4 30 L30 30 M10 30 L10 18 L17 18 M24 30 L24 22 L17 22" stroke="#9FB09F" strokeWidth="1.3" />
+            </svg>
           </div>
           <div className="brand-text">
             <h1>NIRVIVAAD</h1>
