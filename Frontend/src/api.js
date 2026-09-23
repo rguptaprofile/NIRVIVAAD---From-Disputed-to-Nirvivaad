@@ -1,38 +1,53 @@
 // NIRVIVAAD API Client
 // Multi-Endpoint Auto-Discovery, Failover & Intelligent Fallback
 
+const RENDER_CLOUD_URL = 'https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/v1';
+const LOCAL_DEV_URL = 'http://localhost:8000/api/v1';
+const LOCAL_DEV_IP_URL = 'http://127.0.0.1:8000/api/v1';
+
 function getCandidateBases() {
   const envBase = import.meta.env.VITE_API_BASE_URL;
   if (envBase) return [envBase.replace(/\/$/, '')];
 
+  // User manually selected preference stored in localStorage
+  const userPref = typeof window !== 'undefined' ? localStorage.getItem('nirvivaad_selected_api_base') : null;
+
   if (typeof window === 'undefined') {
-    return ['https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/v1'];
+    return [RENDER_CLOUD_URL, LOCAL_DEV_URL];
   }
 
   const hostname = window.location.hostname;
   const port = window.location.port;
 
-  // 1. If served directly by FastAPI backend on port 8000
+  // If served directly by FastAPI backend on port 8000
   if (port === '8000') {
-    return [window.location.origin + '/api/v1', '/api/v1'];
+    return [window.location.origin + '/api/v1', '/api/v1', RENDER_CLOUD_URL];
   }
 
+  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
   const candidates = [];
 
-  // 2. Relative /api/v1 (Works via Vite proxy or reverse proxy)
-  candidates.push('/api/v1');
-
-  // 3. Localhost and 127.0.0.1 on port 8000
-  candidates.push('https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/v1');
-  candidates.push('https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/v1');
-
-  // 4. LAN / Wi-Fi IP on port 8000 (e.g. 192.168.x.x:8000)
-  if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    candidates.push('http://' + hostname + ':8000/api/v1');
+  // If user explicitly picked an endpoint, put it first
+  if (userPref) {
+    candidates.push(userPref.replace(/\/$/, ''));
   }
 
-  // 5. Cloud Production Render Endpoint
-  candidates.push('https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/v1');
+  if (isLocalHost) {
+    // 1. Local development priority: check localhost:8000 first, then 127.0.0.1, then relative, then Render
+    candidates.push(LOCAL_DEV_URL);
+    candidates.push(LOCAL_DEV_IP_URL);
+    candidates.push('/api/v1');
+    candidates.push(RENDER_CLOUD_URL);
+  } else {
+    // 2. Production / Cloud priority: check relative /api/v1, then Render, then LAN/local fallbacks
+    candidates.push('/api/v1');
+    candidates.push(RENDER_CLOUD_URL);
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      candidates.push('http://' + hostname + ':8000/api/v1');
+    }
+    candidates.push(LOCAL_DEV_URL);
+    candidates.push(LOCAL_DEV_IP_URL);
+  }
 
   return [...new Set(candidates)];
 }
@@ -41,12 +56,19 @@ let candidateBases = getCandidateBases();
 let activeBaseIndex = 0;
 
 export function getActiveApiBase() {
-  return candidateBases[activeBaseIndex] || candidateBases[0] || 'https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/v1';
+  return candidateBases[activeBaseIndex] || candidateBases[0] || RENDER_CLOUD_URL;
+}
+
+export function getAllCandidateBases() {
+  return candidateBases;
 }
 
 export function setActiveApiBase(url) {
   if (!url) return;
   const clean = url.replace(/\/$/, '');
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('nirvivaad_selected_api_base', clean);
+  }
   const idx = candidateBases.indexOf(clean);
   if (idx !== -1) {
     activeBaseIndex = idx;
@@ -56,13 +78,25 @@ export function setActiveApiBase(url) {
   }
 }
 
-export async function testBackendConnection() {
+export function switchApiTarget(type) {
+  // 'local' | 'cloud'
+  if (type === 'local') {
+    setActiveApiBase(LOCAL_DEV_URL);
+    return LOCAL_DEV_URL;
+  } else if (type === 'cloud') {
+    setActiveApiBase(RENDER_CLOUD_URL);
+    return RENDER_CLOUD_URL;
+  }
+  return getActiveApiBase();
+}
+
+export async function testBackendConnection(timeoutMs = 6000) {
   for (let i = 0; i < candidateBases.length; i++) {
     const base = candidateBases[i];
     const pingUrl = (base.startsWith('http') ? base : (window.location.origin + base)) + '/auth/ping';
     try {
       const c = new AbortController();
-      const t = setTimeout(() => c.abort(), 4000);
+      const t = setTimeout(() => c.abort(), base.includes('onrender.com') ? Math.max(timeoutMs, 10000) : timeoutMs);
       const res = await fetch(pingUrl, { signal: c.signal });
       clearTimeout(t);
       if (res.ok) {
@@ -74,6 +108,44 @@ export async function testBackendConnection() {
     }
   }
   return { ok: false, base: getActiveApiBase(), status: 'unreachable' };
+}
+
+/**
+ * Intelligent Wake-Up Routine for Render Free Tier (Takes 30-50s when sleeping)
+ * Periodically pings the cloud server with status updates until it wakes up.
+ */
+export async function wakeCloudBackend(onStatus) {
+  const target = RENDER_CLOUD_URL + '/auth/ping';
+  const startTime = Date.now();
+  const maxWaitMs = 70000; // 70 seconds
+
+  if (onStatus) onStatus({ stage: 'starting', message: 'Sending wake-up signal to Render cloud server...', elapsed: 0 });
+
+  while (Date.now() - startTime < maxWaitMs) {
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 8000);
+      const res = await fetch(target, { signal: c.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        setActiveApiBase(RENDER_CLOUD_URL);
+        if (onStatus) onStatus({ stage: 'ready', message: `Cloud backend active & responding! (Woke up in ${elapsed}s)`, elapsed });
+        return { ok: true, elapsed };
+      }
+    } catch {
+      if (onStatus) onStatus({
+        stage: 'waking',
+        message: `Waking up Render instance (${elapsed}s elapsed, usually takes ~30-45s)...`,
+        elapsed
+      });
+    }
+    // Pause 3 seconds between ping attempts
+    await new Promise(r => setTimeout(r, 3000));
+  }
+
+  if (onStatus) onStatus({ stage: 'timeout', message: 'Cloud wake-up timed out. Please verify Render status or switch to Local.', elapsed: 70 });
+  return { ok: false, elapsed: 70 };
 }
 
 async function request(path, options = {}) {
@@ -88,7 +160,7 @@ async function request(path, options = {}) {
 
   let lastError = null;
   const startIndex = activeBaseIndex;
-  const maxAttempts = Math.min(candidateBases.length, 3);
+  const maxAttempts = Math.min(candidateBases.length, 4);
 
   // Try active candidate first, then cycle through alternate candidates upon network failure
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -98,7 +170,8 @@ async function request(path, options = {}) {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      // Generous timeout (25s) to allow sleeping Render instances or complex GIS calculations
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       const fetchOpts = { ...options, headers, signal: controller.signal };
 
       const r = await fetch(fullUrl, fetchOpts);
@@ -126,15 +199,15 @@ async function request(path, options = {}) {
         throw err;
       }
       // Connection failure: try next candidate
-      console.warn('[NIRVIVAAD API] Connection attempt to ' + base + ' failed, trying alternate...');
+      console.warn('[NIRVIVAAD API] Connection attempt to ' + base + ' failed, trying alternate endpoint...');
     }
   }
 
   // If all candidate endpoints were unreachable:
-  const helpfulMsg = 'API server is unreachable. Please verify backend is running on https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com or click Reconnect.';
+  const helpfulMsg = `API server is unreachable at ${getActiveApiBase()}. Please ensure the backend is running locally (run start_all.bat) or wake the Render cloud server.`;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('nirvivaad_backend_unreachable', {
-      detail: { message: helpfulMsg, attempted: candidateBases.slice(0, maxAttempts) }
+      detail: { message: helpfulMsg, attempted: candidateBases.slice(0, maxAttempts), current: getActiveApiBase() }
     }));
   }
   throw new Error(helpfulMsg);
@@ -144,6 +217,10 @@ export const api = {
   ping: () => request('/auth/ping').catch(() => ({})),
   checkHealth: testBackendConnection,
   getActiveBase: getActiveApiBase,
+  getAllBases: getAllCandidateBases,
+  setActiveBase: setActiveApiBase,
+  switchTarget: switchApiTarget,
+  wakeCloud: wakeCloudBackend,
   me: () => request('/auth/me'),
   login: p => request('/auth/login', { method: 'POST', body: JSON.stringify(p) }),
   register: p => request('/auth/register', { method: 'POST', body: JSON.stringify(p) }),
@@ -179,7 +256,13 @@ export const api = {
   govRegistryLookup: p => request('/government/registry-lookup?' + new URLSearchParams(p).toString()),
   govPortals: () => request('/government/portals'),
   integrations: () => request('/integrations/status'),
-  gisParcel: p => request('/gis/parcel?' + new URLSearchParams(p).toString()),
+  gisParcel: p => {
+    const clean = {};
+    Object.entries(p || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') clean[k] = v;
+    });
+    return request('/gis/parcel?' + new URLSearchParams(clean).toString());
+  },
   gisStatus: () => request('/gis/status'),
   verifiedAmins: () => request('/admin/verified-amins'),
   verifyFlow: p => request('/verify-flow', { method: 'POST', body: JSON.stringify(p) })

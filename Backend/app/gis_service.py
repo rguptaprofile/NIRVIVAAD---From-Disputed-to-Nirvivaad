@@ -155,13 +155,15 @@ def generate_bhu_aadhaar_ulpin(state: str, district: str, village: str, khasra_n
     return ulpin
 
 def get_gis_cadastral_parcel(
-    state: str,
-    district: str,
-    circle: str,
-    village: str,
-    khata_no: str,
-    khasra_no: str,
-    api_key: str = None
+    state: str = 'Bihar',
+    district: str = 'Muzaffarpur',
+    circle: str = 'Muzaffarpur Sadar',
+    village: str = 'Kanti',
+    khata_no: str = '47',
+    khasra_no: str = '214/2',
+    api_key: str = None,
+    ulpin: str = None,
+    database = None
 ) -> dict:
     """
     Computes real-time GIS Cadastral Parcel data for a specific plot, including:
@@ -169,9 +171,45 @@ def get_gis_cadastral_parcel(
     - Polygon corner boundary vertices
     - Polygonal area in sq meters and acres
     - Bhu-Aadhaar (ULPIN) identification
+    - Direct lookup and resolution by 14-digit ULPIN
     - Chauhaddi spatial bounding neighbors
     - API Key validation and satellite layer rendering
     """
+    assigned_ulpin = None
+    if ulpin and len(ulpin.strip()) >= 6:
+        clean_ulpin = ulpin.strip().upper()
+        matched_rec = None
+        if database is not None:
+            try:
+                matched_rec = database.records.find_one({'ulpin': clean_ulpin})
+                if not matched_rec and hasattr(database, 'parcels'):
+                    matched_rec = database.parcels.find_one({'ulpin': clean_ulpin})
+            except Exception:
+                pass
+        
+        if matched_rec:
+            state = matched_rec.get('state') or state
+            district = matched_rec.get('district') or district
+            circle = matched_rec.get('circle') or circle
+            village = matched_rec.get('village') or village
+            khata_no = matched_rec.get('khata_no') or khata_no
+            khasra_no = matched_rec.get('khasra_no') or khasra_no
+            assigned_ulpin = clean_ulpin
+        else:
+            inv_st = {v: k for k, v in STATE_CODES.items()}
+            st_prefix = clean_ulpin[:2]
+            if st_prefix in inv_st:
+                state = inv_st[st_prefix]
+            for (st, dst), coord in REGIONAL_COORDINATES.items():
+                if st.lower() == state.lower():
+                    district = dst
+                    break
+            if len(clean_ulpin) >= 10:
+                khasra_chunk = clean_ulpin[6:10].lstrip('0')
+                if khasra_chunk:
+                    khasra_no = khasra_chunk
+            assigned_ulpin = clean_ulpin
+
     # Base centroid lookup with deterministic jitter based on khata and khasra
     base_coord = REGIONAL_COORDINATES.get((state, district))
     if not base_coord and district and "(" in district:
@@ -221,7 +259,10 @@ def get_gis_cadastral_parcel(
     perimeter_m = round(2 * (width_m + length_m), 1)
     
     # Bhu-Aadhaar ULPIN
-    ulpin = generate_bhu_aadhaar_ulpin(state, district, village, khasra_no, centroid_lat, centroid_lng)
+    if not assigned_ulpin:
+        ulpin = generate_bhu_aadhaar_ulpin(state, district, village, khasra_no, centroid_lat, centroid_lng)
+    else:
+        ulpin = assigned_ulpin
     
     # Neighboring survey numbers
     try:

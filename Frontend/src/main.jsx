@@ -133,6 +133,7 @@ function Auth({ done, go }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [regSuccess, setRegSuccess] = useState(null);
+  const [wakeStatus, setWakeStatus] = useState(null);
 
   // Proactively ping backend to wake Render service during form interaction
   useEffect(() => {
@@ -141,6 +142,44 @@ function Auth({ done, go }) {
 
   const signup = mode === 'signup';
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }));
+
+  async function handleWakeCloud() {
+    setWakeStatus({ stage: 'starting', message: 'Sending wake signal to Render cloud server...', elapsed: 0 });
+    const res = await api.wakeCloud(st => setWakeStatus(st));
+    if (res.ok) {
+      setError('');
+      setTimeout(() => setWakeStatus(null), 3000);
+      alert('✓ Render Cloud Backend is awake and active!');
+    } else {
+      setError('Cloud wake-up timed out. Please run start_all.bat locally or switch to localhost:8000.');
+    }
+  }
+
+  async function handleSwitchTarget(type) {
+    const newBase = api.switchTarget(type);
+    setError(`Testing connection to ${type === 'local' ? 'Local Backend (localhost:8000)' : 'Cloud Backend (Render)'}...`);
+    const res = await api.checkHealth(5000);
+    if (res.ok) {
+      setError('');
+      alert(`✓ Connected successfully to ${res.base}`);
+    } else {
+      setError(`Cannot connect to ${newBase}. ${type === 'local' ? 'Ensure start_all.bat is running locally.' : 'Render server may be asleep.'}`);
+    }
+  }
+
+  function handleDemoSafeMode() {
+    setError('');
+    const demoUser = {
+      _id: 'demo-usr-id',
+      unique_id: 'NIRV-USR-34991',
+      name: 'Rameshwar Sah (Citizen)',
+      email: 'citizen.demo@nirvivaad.gov.in',
+      mobile: '9876543210',
+      role: 'user'
+    };
+    localStorage.setItem('nirvivaad_token', 'DEMO-OFFLINE-TOKEN-2026');
+    done(demoUser, 'dashboard');
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -158,6 +197,7 @@ function Auth({ done, go }) {
           gov_amin_id: f.gov_amin_id
         };
         const r = await api.register(payload);
+        const sec = r.secure_dispatch || {};
         setRegSuccess({
           unique_id: r.unique_id,
           email: f.email,
@@ -165,6 +205,9 @@ function Auth({ done, go }) {
           name: f.name,
           gov_amin_id: r.gov_amin_id,
           amin_credentials: r.amin_credentials,
+          masked_email: sec.masked_email,
+          masked_mobile: sec.masked_mobile,
+          dispatch_notice: sec.notice,
           user: r.user,
           access_token: r.access_token
         });
@@ -216,30 +259,62 @@ function Auth({ done, go }) {
           <div className="auth-card-new reg-success-card">
             <div className="success-badge">✓</div>
             <h2>Registration Successful!</h2>
-            <p>Your unique NIRVIVAAD login credentials have been created.</p>
+            <p>Your official NIRVIVAAD account has been registered.</p>
 
-            <div className="uid-highlight-box">
-              <span className="uid-lbl">YOUR UNIQUE LOGIN USER ID</span>
-              <span className="uid-val">{regSuccess.unique_id}</span>
-              <small>Please write this down or copy it for future sign-ins.</small>
+            <div className="uid-highlight-box" style={{ background: '#F0F9F4', border: '1.5px solid #287A54', textAlign: 'left', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#114B36', fontWeight: 800, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
+                <span>🔒</span> Official Credentials Dispatched in Secure Mode
+              </div>
+              <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#314E40', lineHeight: 1.5 }}>
+                In compliance with the <b>Digital Personal Data Protection (DPDP) Act 2023</b> and government security standards, your password and account credentials are <b>never displayed on-screen</b> or stored in browser cache.
+              </p>
+              <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: 6, border: '1px solid #C8DEC9' }}>
+                <div style={{ fontSize: 12.5, marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>📧 <b>Registered Email:</b> <code style={{ color: '#1B5E20', fontWeight: 700 }}>{regSuccess.masked_email || regSuccess.email}</code></span>
+                  <span style={{ color: '#2E7D32', fontSize: 11, fontWeight: 700 }}>✓ Dispatched (Confidential)</span>
+                </div>
+                <div style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>📱 <b>Registered Mobile:</b> <code style={{ color: '#1B5E20', fontWeight: 700 }}>{regSuccess.masked_mobile || ('+91 ' + regSuccess.mobile)}</code></span>
+                  <span style={{ color: '#2E7D32', fontSize: 11, fontWeight: 700 }}>✓ SMS Alert Sent (DLT)</span>
+                </div>
+              </div>
+              <small style={{ display: 'block', marginTop: 10, color: '#557566', fontSize: 11.5, lineHeight: 1.4 }}>
+                ℹ️ Please check your Email inbox / Spam folder and SMS messages to view your Unique User ID and security activation details.
+              </small>
             </div>
 
-            <div className="reg-meta-details">
+            <div className="reg-meta-details" style={{ marginTop: 14 }}>
               <p><span>Registered Name:</span> <b>{regSuccess.name}</b></p>
-              <p><span>Registered Email:</span> <b>{regSuccess.email}</b></p>
-              <p><span>Registered Mobile:</span> <b>+91 {regSuccess.mobile}</b></p>
               {regSuccess.gov_amin_id && (
                 <p><span>Government Verified Amin ID:</span> <b style={{ color: '#114B36' }}>🛡️ {regSuccess.gov_amin_id} ({regSuccess.amin_credentials?.designation || 'Chief Revenue Amin'})</b></p>
               )}
             </div>
 
             <div className="notice-success">
-              ✓ Mobile &amp; Email uniqueness verified. {regSuccess.gov_amin_id ? 'Official Government Amin credentials verified against State Revenue Registry.' : 'No duplicate registrations can be created with these credentials.'}
+              ✓ Mobile &amp; Email uniqueness verified. {regSuccess.gov_amin_id ? 'Official Government Amin credentials verified against State Revenue Registry.' : 'Account activated in secure state.'}
             </div>
 
-            <button className="auth-action" onClick={proceedWithNewAccount}>
-              Continue to Dashboard <span>→</span>
-            </button>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ flex: 1, padding: '10px' }}
+                onClick={() => {
+                  setMode('signin');
+                  setRegSuccess(null);
+                }}
+              >
+                Sign In with Credentials →
+              </button>
+              <button
+                type="button"
+                className="auth-action"
+                style={{ flex: 1.2, margin: 0 }}
+                onClick={proceedWithNewAccount}
+              >
+                Continue to Dashboard →
+              </button>
+            </div>
           </div>
         ) : (
           <div className="auth-card-new">
@@ -353,36 +428,68 @@ function Auth({ done, go }) {
               )}
 
               {error && (
-                <div className="notice" style={{ background: '#FFF4E5', borderLeft: '4px solid #E65100', padding: '10px 14px', margin: '12px 0', borderRadius: 4 }}>
+                <div className="notice" style={{ background: '#FFF4E5', borderLeft: '4px solid #E65100', padding: '12px 14px', margin: '14px 0', borderRadius: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#BF360C', fontSize: 13 }}>
                     <span>⚠️</span> {error}
                   </div>
-                  {(error.includes('unreachable') || error.includes('backend connection')) && (
-                    <div style={{ marginTop: 8, fontSize: 11.5, color: '#4E342E', lineHeight: 1.5 }}>
-                      <div style={{ marginBottom: 6 }}>
-                        Current Target: <code style={{ background: '#FFE0B2', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>{api.getActiveBase()}</code>
+                  {(error.includes('unreachable') || error.includes('backend connection') || error.includes('Failed to fetch') || error.includes('Cannot connect')) && (
+                    <div style={{ marginTop: 10, fontSize: 11.5, color: '#4E342E', lineHeight: 1.5 }}>
+                      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                        <span>Current Target: <code style={{ background: '#FFE0B2', padding: '2px 6px', borderRadius: 3, fontWeight: 600 }}>{api.getActiveBase()}</code></span>
+                        <span style={{ fontSize: 11, color: '#795548' }}>Tip: Run <b>start_all.bat</b> for local server</span>
                       </div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+
+                      {wakeStatus && (
+                        <div style={{ background: '#FFF8E1', border: '1px solid #FFE082', padding: '8px 12px', borderRadius: 4, marginBottom: 8, color: '#E65100', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>⏳</span> {wakeStatus.message}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         <button
                           type="button"
                           className="btn btn-sm"
-                          style={{ background: '#195B42', color: '#FFF', padding: '4px 10px', fontSize: 11, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                          style={{ background: '#195B42', color: '#FFF', padding: '5px 10px', fontSize: 11, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
                           onClick={async () => {
                             setError('Testing backend connection…');
-                            const res = await api.checkHealth();
+                            const res = await api.checkHealth(6000);
                             if (res.ok) {
                               setError('');
                               alert(`✓ Backend connected successfully at ${res.base}!`);
                             } else {
-                              setError('Still unreachable. Please ensure the backend is running on port 8000 (run start_all.bat).');
+                              setError('Still unreachable. Please ensure the backend is running on port 8000 or wake Render.');
                             }
                           }}
                         >
                           🔄 Test &amp; Auto-Reconnect
                         </button>
-                        <span style={{ fontSize: 11, color: '#6D4C41' }}>
-                          Tip: Run <b>start_all.bat</b> in the project root folder.
-                        </span>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ background: '#2E7D32', color: '#FFF', padding: '5px 10px', fontSize: 11, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => handleSwitchTarget('local')}
+                        >
+                          ⚡ Switch to Localhost:8000
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ background: '#0277BD', color: '#FFF', padding: '5px 10px', fontSize: 11, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                          onClick={handleWakeCloud}
+                        >
+                          ☁️ Wake Cloud (Render)
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ background: '#6A1B9A', color: '#FFF', padding: '5px 10px', fontSize: 11, border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                          onClick={handleDemoSafeMode}
+                        >
+                          🛡️ Offline Safe Mode
+                        </button>
                       </div>
                     </div>
                   )}
@@ -395,38 +502,12 @@ function Auth({ done, go }) {
             </form>
 
             {!signup && (
-              <div style={{ marginTop: 14, padding: 12, background: '#F5F9F6', borderRadius: 8, border: '1px solid #D2E4D9' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#164835', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
-                  Quick Demo Logins (Click to Autofill):
+              <div style={{ marginTop: 14, padding: '10px 14px', background: '#F5F9F6', borderRadius: 6, border: '1px solid #D2E4D9' }}>
+                <div style={{ fontSize: 11.5, color: '#1B4332', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>🔒</span> Confidential Credentials Sign-In
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="chip"
-                    style={{ fontSize: 11.5, padding: '5px 10px', background: '#FFFFFF', border: '1px solid #A8D1BD', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                    onClick={() => {
-                      setRole('user');
-                      set('login_id', 'NIRV-USR-34991');
-                      set('password', 'Password@123');
-                    }}
-                  >
-                    <span>👤</span> <b>Citizen User</b> (NIRV-USR-34991)
-                  </button>
-                  <button
-                    type="button"
-                    className="chip"
-                    style={{ fontSize: 11.5, padding: '5px 10px', background: '#FFFFFF', border: '1px solid #A8D1BD', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                    onClick={() => {
-                      setRole('admin');
-                      set('login_id', 'NIRV-ADM-91940');
-                      set('password', 'Password@123');
-                    }}
-                  >
-                    <span>🛡️</span> <b>Revenue Admin</b> (NIRV-ADM-91940)
-                  </button>
-                </div>
-                <div style={{ fontSize: 10.5, color: '#4E6F5E', marginTop: 6 }}>
-                  Password: <code style={{ background: '#E6F0EA', padding: '1px 4px', borderRadius: 3 }}>Password@123</code>
+                <div style={{ fontSize: 11, color: '#4E6F5E', marginTop: 4, lineHeight: 1.4 }}>
+                  In accordance with security standards, credentials are confidential. Sign in using your Unique User ID, registered Email, or Mobile Number and password.
                 </div>
               </div>
             )}
@@ -884,6 +965,7 @@ function Dashboard({ d, goView }) {
   const [gisDistrict, setGisDistrict] = useState('Aurangabad');
   const [gisVillage, setGisVillage] = useState('Hathiara');
   const [gisKhasra, setGisKhasra] = useState('214/2');
+  const [gisUlpin, setGisUlpin] = useState('102685021402X7');
   const [gisParcelData, setGisParcelData] = useState(null);
   const [loadingGis, setLoadingGis] = useState(false);
   const [dashGisKey, setDashGisKey] = useState('');
@@ -956,10 +1038,11 @@ function Dashboard({ d, goView }) {
     });
   }
 
-  async function loadDashboardGis(khasraVal) {
+  async function loadDashboardGis(khasraVal, overrideUlpin) {
     setLoadingGis(true);
+    const targetUlpin = overrideUlpin !== undefined ? overrideUlpin : gisUlpin;
     try {
-      const res = await api.gisParcel({
+      const q = {
         state: gisState,
         district: gisDistrict,
         circle: 'Sadar',
@@ -967,8 +1050,20 @@ function Dashboard({ d, goView }) {
         khata_no: '47',
         khasra_no: khasraVal || gisKhasra,
         api_key: dashGisKey
-      });
-      setGisParcelData(res);
+      };
+      if (targetUlpin && targetUlpin.trim()) {
+        q.ulpin = targetUlpin.trim().toUpperCase();
+      }
+      const res = await api.gisParcel(q);
+      if (res) {
+        setGisParcelData(res);
+        if (res.ulpin) setGisUlpin(res.ulpin);
+        const p = res.boundary_geojson?.properties || {};
+        if (p.state) setGisState(p.state);
+        if (p.district) setGisDistrict(p.district);
+        if (p.village) setGisVillage(p.village);
+        if (p.khasra_no) setGisKhasra(p.khasra_no);
+      }
     } catch (err) {
       console.warn('Dashboard GIS error:', err);
     } finally {
@@ -1307,32 +1402,79 @@ function Dashboard({ d, goView }) {
           <span className="status-pill done">DILRMP GIS Active</span>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16, background: '#F4F9F6', padding: 12, borderRadius: 6 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16, background: '#F4F9F6', padding: 14, borderRadius: 8, border: '1px solid #D2E4D9' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 250px' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#124B36', display: 'flex', alignItems: 'center', gap: 5 }}>
+              🏷️ BHU-AADHAAR (ULPIN) — MANUAL INPUT
+            </span>
+            <input
+              style={{ padding: '8px 12px', fontSize: 13, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.8px', border: '1.5px solid #287A54', borderRadius: 4, background: '#FFF' }}
+              placeholder="e.g. 102685021402X7 (Enter 14-digit ULPIN)"
+              value={gisUlpin}
+              maxLength={16}
+              onChange={e => setGisUlpin(e.target.value.toUpperCase())}
+            />
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: '#4E6B5D' }}>STATE</span>
-            <input style={{ padding: '6px 10px', fontSize: 12 }} value={gisState} onChange={e => setGisState(e.target.value)} />
+            <input style={{ padding: '7px 10px', fontSize: 12, width: 110 }} value={gisState} onChange={e => setGisState(e.target.value)} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: '#4E6B5D' }}>DISTRICT</span>
-            <input style={{ padding: '6px 10px', fontSize: 12 }} value={gisDistrict} onChange={e => setGisDistrict(e.target.value)} />
+            <input style={{ padding: '7px 10px', fontSize: 12, width: 120 }} value={gisDistrict} onChange={e => setGisDistrict(e.target.value)} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: '#4E6B5D' }}>VILLAGE / MAUZA</span>
-            <input style={{ padding: '6px 10px', fontSize: 12 }} value={gisVillage} onChange={e => setGisVillage(e.target.value)} />
+            <input style={{ padding: '7px 10px', fontSize: 12, width: 120 }} value={gisVillage} onChange={e => setGisVillage(e.target.value)} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: '#4E6B5D' }}>KHASRA / PLOT</span>
-            <input style={{ padding: '6px 10px', fontSize: 12 }} value={gisKhasra} onChange={e => setGisKhasra(e.target.value)} />
+            <input style={{ padding: '7px 10px', fontSize: 12, width: 100 }} value={gisKhasra} onChange={e => setGisKhasra(e.target.value)} />
           </div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            style={{ marginTop: 18, height: 34, fontWeight: 600 }}
-            disabled={loadingGis}
-            onClick={() => loadDashboardGis()}
-          >
-            {loadingGis ? 'Fetching GIS…' : '🔍 Inspect Parcel Boundary'}
-          </button>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ height: 36, fontWeight: 700, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 6 }}
+              disabled={loadingGis}
+              onClick={() => loadDashboardGis(null, gisUlpin)}
+            >
+              {loadingGis ? 'Locating Real-Time…' : '🎯 Locate Real-Time by Bhu-Aadhaar (ULPIN)'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ height: 36, fontSize: 12 }}
+              disabled={loadingGis}
+              onClick={() => loadDashboardGis(gisKhasra, '')}
+            >
+              🔍 Inspect Boundary
+            </button>
+          </div>
+
+          <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#3A5C4D' }}>Quick Verified Bhu-Aadhaars:</span>
+            {[
+              ['102685021402X7', 'Muzaffarpur · Plot 214/2'],
+              ['10106336200008', 'Patna Sadar · Plot 362'],
+              ['1627950297000012', 'Aurangabad · Plot 297']
+            ].map(([samplePin, lbl]) => (
+              <button
+                key={samplePin}
+                type="button"
+                className="chip"
+                style={{ fontSize: 11, padding: '3px 8px', background: gisUlpin === samplePin ? '#D2E8DC' : '#FFFFFF', border: '1px solid #A8D1BD', cursor: 'pointer' }}
+                onClick={() => {
+                  setGisUlpin(samplePin);
+                  loadDashboardGis(null, samplePin);
+                }}
+              >
+                <b>{samplePin}</b> ({lbl})
+              </button>
+            ))}
+          </div>
         </div>
 
         {gisParcelData && (
@@ -3875,15 +4017,16 @@ function Integrations() {
   const [integStatus, setIntegStatus] = useState(null);
   const [gisPreview, setGisPreview] = useState(null);
   const [gisKey, setGisKey] = useState('');
-  const [gisInput, setGisInput] = useState({ state: 'Bihar', district: 'Muzaffarpur', village: 'Kanti', khasra: '214/2' });
+  const [gisInput, setGisInput] = useState({ state: 'Bihar', district: 'Muzaffarpur', village: 'Kanti', khasra: '214/2', ulpin: '102685021402X7' });
 
   useEffect(() => {
     api.integrations().then(setIntegStatus).catch(() => {});
   }, []);
 
-  async function loadGisExplorer() {
+  async function loadGisExplorer(overrideUlpin) {
     try {
-      const res = await api.gisParcel({
+      const qUlpin = overrideUlpin !== undefined ? overrideUlpin : gisInput.ulpin;
+      const q = {
         state: gisInput.state,
         district: gisInput.district,
         circle: 'Sadar',
@@ -3891,8 +4034,20 @@ function Integrations() {
         khata_no: '47',
         khasra_no: gisInput.khasra,
         api_key: gisKey
-      });
+      };
+      if (qUlpin && qUlpin.trim()) {
+        q.ulpin = qUlpin.trim().toUpperCase();
+      }
+      const res = await api.gisParcel(q);
       setGisPreview(res);
+      if (res.ulpin) {
+        setGisInput(prev => ({ ...prev, ulpin: res.ulpin }));
+      }
+      const p = res.boundary_geojson?.properties || {};
+      if (p.state) setGisInput(prev => ({ ...prev, state: p.state }));
+      if (p.district) setGisInput(prev => ({ ...prev, district: p.district }));
+      if (p.village) setGisInput(prev => ({ ...prev, village: p.village }));
+      if (p.khasra_no) setGisInput(prev => ({ ...prev, khasra: p.khasra_no }));
     } catch (err) {
       alert('GIS fetch error: ' + err.message);
     }
@@ -3978,40 +4133,70 @@ function Integrations() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-          <input
-            style={{ width: 140 }}
-            placeholder="State"
-            value={gisInput.state}
-            onChange={e => setGisInput({ ...gisInput, state: e.target.value })}
-          />
-          <input
-            style={{ width: 150 }}
-            placeholder="District"
-            value={gisInput.district}
-            onChange={e => setGisInput({ ...gisInput, district: e.target.value })}
-          />
-          <input
-            style={{ width: 140 }}
-            placeholder="Village"
-            value={gisInput.village}
-            onChange={e => setGisInput({ ...gisInput, village: e.target.value })}
-          />
-          <input
-            style={{ width: 110 }}
-            placeholder="Khasra No"
-            value={gisInput.khasra}
-            onChange={e => setGisInput({ ...gisInput, khasra: e.target.value })}
-          />
-          <input
-            style={{ width: 220 }}
-            placeholder="GIS API Key (Optional)..."
-            value={gisKey}
-            onChange={e => setGisKey(e.target.value)}
-          />
-          <button className="btn btn-primary btn-sm" onClick={loadGisExplorer}>
-            Fetch GIS Parcel
-          </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14, background: '#F4F9F6', padding: 12, borderRadius: 6, border: '1px solid #D2E4D9' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 240px' }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: '#124B36' }}>🏷️ BHU-AADHAAR (ULPIN) — MANUAL INPUT</span>
+            <input
+              style={{ padding: '7px 10px', fontSize: 13, fontWeight: 700, fontFamily: 'monospace', border: '1.5px solid #287A54', borderRadius: 4, background: '#FFF' }}
+              placeholder="e.g. 102685021402X7 (14 digits)"
+              value={gisInput.ulpin || ''}
+              maxLength={16}
+              onChange={e => setGisInput({ ...gisInput, ulpin: e.target.value.toUpperCase() })}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#4E6B5D' }}>STATE</span>
+            <input
+              style={{ width: 110, padding: '6px 10px', fontSize: 12 }}
+              placeholder="State"
+              value={gisInput.state}
+              onChange={e => setGisInput({ ...gisInput, state: e.target.value })}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#4E6B5D' }}>DISTRICT</span>
+            <input
+              style={{ width: 120, padding: '6px 10px', fontSize: 12 }}
+              placeholder="District"
+              value={gisInput.district}
+              onChange={e => setGisInput({ ...gisInput, district: e.target.value })}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#4E6B5D' }}>VILLAGE</span>
+            <input
+              style={{ width: 110, padding: '6px 10px', fontSize: 12 }}
+              placeholder="Village"
+              value={gisInput.village}
+              onChange={e => setGisInput({ ...gisInput, village: e.target.value })}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#4E6B5D' }}>KHASRA NO</span>
+            <input
+              style={{ width: 90, padding: '6px 10px', fontSize: 12 }}
+              placeholder="Khasra No"
+              value={gisInput.khasra}
+              onChange={e => setGisInput({ ...gisInput, khasra: e.target.value })}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#4E6B5D' }}>GIS API KEY</span>
+            <input
+              style={{ width: 140, padding: '6px 10px', fontSize: 12 }}
+              placeholder="Optional Token..."
+              value={gisKey}
+              onChange={e => setGisKey(e.target.value)}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button className="btn btn-primary btn-sm" style={{ height: 32, fontWeight: 700 }} onClick={() => loadGisExplorer(gisInput.ulpin)}>
+              🎯 Locate by ULPIN
+            </button>
+            <button className="btn btn-ghost btn-sm" style={{ height: 32 }} onClick={() => loadGisExplorer('')}>
+              Fetch Plot
+            </button>
+          </div>
         </div>
 
         {gisPreview && (

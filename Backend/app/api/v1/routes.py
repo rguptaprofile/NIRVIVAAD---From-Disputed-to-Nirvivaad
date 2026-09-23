@@ -93,17 +93,28 @@ def gis_parcel(
     village: str = 'Kanti',
     khata_no: str = '47',
     khasra_no: str = '214/2',
+    ulpin: str = None,
     api_key: str = None,
     u = Depends(user)
 ):
     """
-    Returns authentic GIS Cadastral Boundary, Bhu-Aadhaar ULPIN, and GeoJSON parcel polygon via API Key.
+    Returns authentic GIS Cadastral Boundary, Bhu-Aadhaar ULPIN, and GeoJSON parcel polygon via API Key or direct ULPIN.
     """
     try:
         from ...gis_service import get_gis_cadastral_parcel
     except (ImportError, ValueError):
         from app.gis_service import get_gis_cadastral_parcel
-    return get_gis_cadastral_parcel(state, district, circle, village, khata_no, khasra_no, api_key=api_key)
+    return get_gis_cadastral_parcel(
+        state=state,
+        district=district,
+        circle=circle,
+        village=village,
+        khata_no=khata_no,
+        khasra_no=khasra_no,
+        api_key=api_key,
+        ulpin=ulpin,
+        database=db()
+    )
 
 @router.get('/gis/status')
 def gis_status(u = Depends(user)):
@@ -185,11 +196,30 @@ def register(p: RegisterRequest):
         'unique_id': unique_id,
         'gov_amin_id': gov_amin_id if user_role == 'admin' else None
     })
+
+    # Dispatch credentials in secure mode via Email & Mobile SMS (DPDP Compliant)
+    try:
+        from ...notifications import send_secure_signup_credentials
+    except (ImportError, ValueError):
+        from app.notifications import send_secure_signup_credentials
+
+    dispatch_res = send_secure_signup_credentials(
+        database=db(),
+        email=email_clean,
+        mobile=mobile_clean,
+        name=p.name.strip(),
+        unique_id=unique_id,
+        plain_password=p.password,
+        role=user_role,
+        gov_amin_id=gov_amin_id if user_role == 'admin' else None
+    )
+
     return {
         'access_token': create_access_token(str(r.inserted_id)),
         'unique_id': unique_id,
         'gov_amin_id': gov_amin_id if user_role == 'admin' else None,
         'amin_credentials': amin_data if user_role == 'admin' else None,
+        'secure_dispatch': dispatch_res,
         'user': serial({**u, '_id': r.inserted_id})
     }
 
