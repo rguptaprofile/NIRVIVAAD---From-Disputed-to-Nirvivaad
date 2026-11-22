@@ -3,5 +3,11 @@
   "installCommand": "npm --prefix Frontend install",
   "buildCommand": "npm --prefix Frontend run build",
   "outputDirectory": "Frontend/dist",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://nirvivaad-from-disputed-to-nirvivaad-5.onrender.com/api/:match*"
+    }
+  ]
 }

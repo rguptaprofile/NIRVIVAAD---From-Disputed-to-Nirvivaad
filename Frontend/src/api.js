@@ -33,20 +33,22 @@ function getCandidateBases() {
   }
 
   if (isLocalHost) {
-    // 1. Local development priority: check localhost:8000 first, then 127.0.0.1, then relative, then Render
+    // 1. Local development priority: check localhost:8000 first, then 127.0.0.1, then Render, then relative
     candidates.push(LOCAL_DEV_URL);
     candidates.push(LOCAL_DEV_IP_URL);
-    candidates.push('/api/v1');
     candidates.push(RENDER_CLOUD_URL);
+    candidates.push('/api/v1');
   } else {
-    // 2. Production / Cloud priority: check relative /api/v1, then Render, then LAN/local fallbacks
-    candidates.push('/api/v1');
+    // 2. Production / Cloud priority: check Render cloud production directly first
     candidates.push(RENDER_CLOUD_URL);
-    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      candidates.push('http://' + hostname + ':8000/api/v1');
+    candidates.push('/api/v1');
+    if (typeof window !== 'undefined' && window.location.protocol !== 'https:') {
+      if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        candidates.push('http://' + hostname + ':8000/api/v1');
+      }
+      candidates.push(LOCAL_DEV_URL);
+      candidates.push(LOCAL_DEV_IP_URL);
     }
-    candidates.push(LOCAL_DEV_URL);
-    candidates.push(LOCAL_DEV_IP_URL);
   }
 
   return [...new Set(candidates)];
@@ -93,6 +95,9 @@ export function switchApiTarget(type) {
 export async function testBackendConnection(timeoutMs = 6000) {
   for (let i = 0; i < candidateBases.length; i++) {
     const base = candidateBases[i];
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && base.startsWith('http:')) {
+      continue;
+    }
     const pingUrl = (base.startsWith('http') ? base : (window.location.origin + base)) + '/auth/ping';
     try {
       const c = new AbortController();
@@ -100,8 +105,11 @@ export async function testBackendConnection(timeoutMs = 6000) {
       const res = await fetch(pingUrl, { signal: c.signal });
       clearTimeout(t);
       if (res.ok) {
-        activeBaseIndex = i;
-        return { ok: true, base, status: 'connected' };
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          activeBaseIndex = i;
+          return { ok: true, base, status: 'connected' };
+        }
       }
     } catch {
       // Continue to next candidate
@@ -170,36 +178,93 @@ async function request(path, options = {}) {
 
     try {
       const controller = new AbortController();
-      // Generous timeout (25s) to allow sleeping Render instances or complex GIS calculations
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      // Generous timeout (45s for Render cloud wake-up, 15s for local) to allow sleeping Render instances
+      const reqTimeout = base.includes('onrender.com') ? 45000 : 15000;
+      const timeoutId = setTimeout(() => controller.abort(), reqTimeout);
       const fetchOpts = { ...options, headers, signal: controller.signal };
 
       const r = await fetch(fullUrl, fetchOpts);
       clearTimeout(timeoutId);
 
-      // Successfully reached a working backend! Set as active
+      let responseData = null;
+      let isJson = false;
+      try {
+        const text = await r.text();
+        try {
+          responseData = JSON.parse(text);
+          isJson = true;
+        } catch {
+          responseData = { rawText: text };
+          isJson = false;
+        }
+      } catch {
+        responseData = {};
+      }
+
+      // If the candidate endpoint returned a static routing or proxy error:
+      // - Non-JSON response (e.g. HTML error page from web server / CDN)
+      // - 404 / 405 on an auth endpoint (means this host does not have the backend API mounted)
+      // - 502/503/504 (Bad Gateway / Service Unavailable from proxy / sleeping container)
+      // Treat this as an endpoint reachability/routing failure and try the NEXT candidate!
+      const isEndpointCandidateFailure =
+        !isJson ||
+        ((r.status === 404 || r.status === 405) && path.startsWith('/auth')) ||
+        (r.status >= 502 && r.status <= 504);
+
+      if (isEndpointCandidateFailure) {
+        console.warn(`[NIRVIVAAD API] Candidate ${base} returned HTTP ${r.status} (${isJson ? 'JSON' : 'non-JSON'}). Trying next candidate endpoint...`);
+        continue;
+      }
+
+      // Successfully reached a working NIRVIVAAD backend! Set as active
       activeBaseIndex = candidateIdx;
 
-      const b = await r.json().catch(() => ({}));
       if (r.status === 401) {
         if (!path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
           localStorage.removeItem('nirvivaad_token');
           localStorage.removeItem('nirvivaad_user');
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('nirvivaad_session_expired', { detail: b.detail || 'Session expired' }));
+            window.dispatchEvent(new CustomEvent('nirvivaad_session_expired', { detail: responseData?.detail || 'Session expired' }));
           }
         }
       }
-      if (!r.ok) throw new Error(b.detail || 'Request failed');
-      return b;
+
+      if (!r.ok) {
+        let msg = '';
+        if (typeof responseData?.detail === 'string') {
+          msg = responseData.detail;
+        } else if (Array.isArray(responseData?.detail)) {
+          msg = responseData.detail.map(d => {
+            const field = d.loc && d.loc.length > 1 ? d.loc[d.loc.length - 1] : '';
+            return (field ? `${field}: ` : '') + (d.msg || 'Invalid field');
+          }).join('. ');
+        } else if (typeof responseData?.message === 'string') {
+          msg = responseData.message;
+        } else if (typeof responseData?.error === 'string') {
+          msg = responseData.error;
+        } else if (r.status === 401) {
+          msg = 'Incorrect login credentials. Please verify your Unique ID / Email and password.';
+        } else if (r.status === 409) {
+          msg = 'This account (Email or Mobile) is already registered. Please sign in or use different details.';
+        } else if (r.status === 422) {
+          msg = 'Validation error: Please ensure all required fields are filled correctly (mobile 10 digits, password min 8 characters).';
+        } else {
+          msg = `Server returned status ${r.status}. Please try again.`;
+        }
+
+        const businessErr = new Error(msg);
+        businessErr.isBusinessError = true;
+        businessErr.status = r.status;
+        throw businessErr;
+      }
+
+      return responseData || {};
     } catch (err) {
       lastError = err;
-      // If it is a real business/validation error from the server (e.g. 400 Bad Request, 422 Unprocessable), throw immediately!
-      if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError') && !err.name?.includes('AbortError')) {
+      if (err.isBusinessError) {
         throw err;
       }
-      // Connection failure: try next candidate
-      console.warn('[NIRVIVAAD API] Connection attempt to ' + base + ' failed, trying alternate endpoint...');
+      console.warn('[NIRVIVAAD API] Connection attempt to ' + base + ' failed (' + err.message + '), trying alternate candidate...');
     }
   }
 

@@ -187,22 +187,43 @@ function Auth({ done, go }) {
     setError('');
     try {
       if (signup) {
+        const nameClean = (f.name || '').trim();
+        const emailClean = (f.email || '').trim().toLowerCase();
+        const mobileClean = (f.mobile || '').replace(/\D/g, '');
+        const pass = f.password || '';
+
+        if (nameClean.length < 2) {
+          throw new Error('Please enter your full name (minimum 2 characters).');
+        }
+        if (!emailClean || !emailClean.includes('@') || !emailClean.includes('.')) {
+          throw new Error('Please enter a valid email address.');
+        }
+        if (mobileClean.length !== 10) {
+          throw new Error('Please enter a valid 10-digit mobile number.');
+        }
+        if (pass.length < 8) {
+          throw new Error('Password must be at least 8 characters long.');
+        }
+        if (role === 'admin' && !(f.gov_amin_id || '').trim()) {
+          throw new Error('Government Unique Amin ID is required for Revenue Administrator registration.');
+        }
+
         const payload = {
-          name: f.name,
-          email: f.email,
-          mobile: f.mobile,
-          password: f.password,
+          name: nameClean,
+          email: emailClean,
+          mobile: mobileClean,
+          password: pass,
           role,
-          admin_code: f.admin_code,
-          gov_amin_id: f.gov_amin_id
+          admin_code: f.admin_code || '',
+          gov_amin_id: (f.gov_amin_id || '').trim().toUpperCase()
         };
         const r = await api.register(payload);
         const sec = r.secure_dispatch || {};
         setRegSuccess({
           unique_id: r.unique_id,
-          email: f.email,
-          mobile: f.mobile,
-          name: f.name,
+          email: emailClean,
+          mobile: mobileClean,
+          name: nameClean,
           gov_amin_id: r.gov_amin_id,
           amin_credentials: r.amin_credentials,
           masked_email: sec.masked_email,
@@ -212,19 +233,31 @@ function Auth({ done, go }) {
           access_token: r.access_token
         });
       } else {
+        const loginClean = (f.login_id || f.email || '').trim();
+        const pass = f.password || '';
+        if (!loginClean) {
+          throw new Error('Please enter your Unique Login ID, Email, or Mobile number.');
+        }
+        if (!pass) {
+          throw new Error('Please enter your password.');
+        }
+
         const payload = {
-          login_id: f.login_id || f.email,
-          password: f.password,
+          login_id: loginClean,
+          password: pass,
           role
         };
         const r = await api.login(payload);
+        if (!r.access_token) {
+          throw new Error('Login succeeded but session token was missing. Please try again.');
+        }
         localStorage.setItem('nirvivaad_token', r.access_token);
         const userObj = r.user || {};
         const targetView = (userObj.role === 'admin' || r.role === 'admin') ? 'admin' : 'dashboard';
         done(userObj, targetView);
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Operation failed. Please verify your details and try again.');
     } finally {
       setBusy(false);
     }
@@ -503,8 +536,36 @@ function Auth({ done, go }) {
 
             {!signup && (
               <div style={{ marginTop: 14, padding: '10px 14px', background: '#F5F9F6', borderRadius: 6, border: '1px solid #D2E4D9' }}>
-                <div style={{ fontSize: 11.5, color: '#1B4332', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>🔒</span> Confidential Credentials Sign-In
+                <div style={{ fontSize: 11.5, color: '#1B4332', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>🔒 Confidential Credentials Sign-In</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="chip"
+                      style={{ fontSize: 10.5, padding: '2px 8px', background: '#FFFFFF', border: '1px solid #A8D1BD', cursor: 'pointer' }}
+                      title="Autofill verified citizen demo account"
+                      onClick={() => {
+                        setRole('user');
+                        set('login_id', 'NIRV-USR-34991');
+                        set('password', 'Password@123');
+                      }}
+                    >
+                      ⚡ Demo Citizen
+                    </button>
+                    <button
+                      type="button"
+                      className="chip"
+                      style={{ fontSize: 10.5, padding: '2px 8px', background: '#FFFFFF', border: '1px solid #A8D1BD', cursor: 'pointer' }}
+                      title="Autofill verified revenue admin demo account"
+                      onClick={() => {
+                        setRole('admin');
+                        set('login_id', 'NIRV-ADM-91940');
+                        set('password', 'Password@123');
+                      }}
+                    >
+                      🛡️ Demo Admin
+                    </button>
+                  </div>
                 </div>
                 <div style={{ fontSize: 11, color: '#4E6F5E', marginTop: 4, lineHeight: 1.4 }}>
                   In accordance with security standards, credentials are confidential. Sign in using your Unique User ID, registered Email, or Mobile Number and password.
